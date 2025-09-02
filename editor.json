@@ -1,0 +1,22 @@
+{
+    "ffmpeg": {
+        "binDir": "C:\\\\ffmpeg\\\\bin",
+        "ffmpegExe": "ffmpeg.exe",
+        "ffprobeExe": "ffprobe.exe",
+        "defaultArgs": [ "-y" ]
+    },
+    "renderProfiles": {
+        "h264_1080p": {
+            "container": "mp4",
+            "videoCodec": "libx264",
+            "audioCodec": "aac",
+            "pixFmt": "yuv420p",
+            "videoBitrate": "5M",
+            "audioBitrate": "192k",
+            "preset": "medium",
+            "crf": 20,
+            "audioChannels": 2,
+            "audioRate": 48000
+        }
+    }
+}
