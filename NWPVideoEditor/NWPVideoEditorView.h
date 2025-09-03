@@ -7,6 +7,8 @@ struct ClipItem {
     int     iImage = -1;
 };
 
+class CNWPVideoEditorDoc; // Forward declaration
+
 class NWPVideoEditorView : public CView
 {
 protected:
@@ -14,6 +16,9 @@ protected:
     DECLARE_DYNCREATE(NWPVideoEditorView)
 
 public:
+    // FIXED - Add GetDocument declaration
+    CNWPVideoEditorDoc* GetDocument() const;
+
     // Media grid
     CListCtrl   m_list;
     CImageList  m_imgLarge;
@@ -72,3 +77,11 @@ private:
     void SetActiveClipFromSelection();
     int  HitTestTimelineHandle(CPoint pt) const;
 };
+
+// FIXED - GetDocument implementation for Release builds
+#ifndef _DEBUG  // debug version in NWPVideoEditorView.cpp
+inline CNWPVideoEditorDoc* NWPVideoEditorView::GetDocument() const
+{
+    return reinterpret_cast<CNWPVideoEditorDoc*>(m_pDocument);
+}
+#endif

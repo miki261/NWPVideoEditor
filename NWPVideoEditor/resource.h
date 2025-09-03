@@ -89,6 +89,40 @@
 #define ID_FILE_EXPORT                  32812
 #define ID_EDIT_ADDTEXT					32813
 
+#ifndef IDI_CLASS_FOLDER_CLOSED  
+#define IDI_CLASS_FOLDER_CLOSED     3001
+#endif
+#ifndef IDI_CLASS_FOLDER_OPEN
+#define IDI_CLASS_FOLDER_OPEN       3002  
+#endif
+#ifndef IDI_CLASS
+#define IDI_CLASS                   3003
+#endif
+#ifndef IDI_METHOD
+#define IDI_METHOD                  3004
+#endif
+#ifndef IDI_METHOD_PRIVATE
+#define IDI_METHOD_PRIVATE          3005
+#endif
+#ifndef IDI_METHOD_PROTECTED  
+#define IDI_METHOD_PROTECTED        3006
+#endif
+#ifndef IDI_VARIABLE
+#define IDI_VARIABLE                3007
+#endif
+#ifndef IDI_VARIABLE_PRIVATE
+#define IDI_VARIABLE_PRIVATE        3008
+#endif
+#ifndef IDI_VARIABLE_PROTECTED
+#define IDI_VARIABLE_PROTECTED      3009
+#endif
+#ifndef IDR_CLASS_VIEW_POPUP
+#define IDR_CLASS_VIEW_POPUP        3010
+#endif
+#ifndef IDR_POPUP_CLASSVIEW  
+#define IDR_POPUP_CLASSVIEW         3011
+#endif
+
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS

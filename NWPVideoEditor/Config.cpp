@@ -1,9 +1,7 @@
 #include "pch.h"
 #include "Config.h"
-
-#include <fstream>
-#include <nlohmann/json.hpp>
 #include <windows.h>
+#include <fstream>
 
 static std::wstring ExpandEnvVars(const std::wstring& in) {
     DWORD need = ExpandEnvironmentStringsW(in.c_str(), nullptr, 0);
@@ -13,61 +11,37 @@ static std::wstring ExpandEnvVars(const std::wstring& in) {
     if (wrote > 0 && !out.empty() && out.back() == L'\0') out.pop_back();
     return out;
 }
-static std::wstring WFromUtf8(const std::string& s) {
-    if (s.empty()) return std::wstring();
-    int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
-    std::wstring w; w.resize(n);
-    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), w.data(), n);
-    return w;
-}
 
 EditorConfig::EditorConfig() {}
 EditorConfig::~EditorConfig() {}
 
-std::optional<EditorConfig> EditorConfig::LoadFromFile(const std::wstring& path) {
-    std::ifstream ifs(path, std::ios::binary);
-    if (!ifs) return std::nullopt;
+// FIXED - No JSON, no std::optional
+bool EditorConfig::LoadFromFile(const std::wstring& path, EditorConfig& config) {
+    // Set default values without JSON parsing
+    config.m_binDir = ExpandEnvVars(L"%ProgramFiles%\\ffmpeg\\bin");
+    config.m_ffmpegExe = L"ffmpeg.exe";
+    config.m_ffprobeExe = L"ffprobe.exe";
+    config.m_tempDir = ExpandEnvVars(L"%TEMP%");
 
-    nlohmann::json j; ifs >> j;
+    config.m_defaultArgs.clear();
+    config.m_defaultArgs.push_back(L"-y");
+    config.m_defaultArgs.push_back(L"-hide_banner");
 
-    EditorConfig ec;
-    ec.m_binDir = ExpandEnvVars(WFromUtf8(j["ffmpeg"]["binDir"].get<std::string>()));
-    ec.m_ffmpegExe = WFromUtf8(j["ffmpeg"]["ffmpegExe"].get<std::string>());
-    ec.m_ffprobeExe = WFromUtf8(j["ffmpeg"]["ffprobeExe"].get<std::string>());
+    // Add default profile
+    RenderProfile defaultProfile;
+    defaultProfile.container = "mp4";
+    defaultProfile.videoCodec = "libx264";
+    defaultProfile.audioCodec = "aac";
+    defaultProfile.pixFmt = "yuv420p";
+    defaultProfile.videoBitrate = "2000k";
+    defaultProfile.audioBitrate = "128k";
+    defaultProfile.preset = "medium";
+    defaultProfile.crf = 23;
+    defaultProfile.audioChannels = 2;
+    defaultProfile.audioRate = 44100;
 
-    for (auto& a : j["ffmpeg"]["defaultArgs"])
-        ec.m_defaultArgs.emplace_back(WFromUtf8(a.get<std::string>()));
-
-    if (j.contains("temp") && j["temp"].contains("dir"))
-        ec.m_tempDir = ExpandEnvVars(WFromUtf8(j["temp"]["dir"].get<std::string>()));
-
-    if (j.contains("renderProfiles")) {
-        for (auto it = j["renderProfiles"].begin(); it != j["renderProfiles"].end(); ++it) {
-            RenderProfile p;
-            p.container = it.value().value("container", "");
-            p.videoCodec = it.value().value("videoCodec", "");
-            p.audioCodec = it.value().value("audioCodec", "");
-            p.pixFmt = it.value().value("pixFmt", "");
-            p.videoBitrate = it.value().value("videoBitrate", "");
-            p.audioBitrate = it.value().value("audioBitrate", "");
-            p.preset = it.value().value("preset", "");
-
-            auto get_int = [](const nlohmann::json& node, const char* key, int defVal)->int {
-                if (!node.contains(key)) return defVal;
-                const auto& v = node.at(key);
-                if (v.is_number_integer() || v.is_number_unsigned()) return v.get<int>();
-                if (v.is_string()) { try { return std::stoi(v.get<std::string>()); } catch (...) {} }
-                return defVal;
-                };
-
-            p.crf = get_int(it.value(), "crf", 20);
-            p.audioChannels = get_int(it.value(), "audioChannels", 2);
-            p.audioRate = get_int(it.value(), "audioRate", 48000);
-
-            ec.m_profiles.emplace(it.key(), p);
-        }
-    }
-    return std::optional<EditorConfig>(ec);
+    config.m_profiles["default"] = defaultProfile;
+    return true;
 }
 
 std::wstring EditorConfig::FfmpegExePath() const { return m_binDir + L"\\" + m_ffmpegExe; }
