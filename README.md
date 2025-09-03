@@ -20,9 +20,6 @@ Build configurations supported:
 - Debug x86, Release x86
 - Debug x64, Release x64
 
-If a configuration is missing:
-- Build > Configuration Manager… > <New…> > Copy from a working config.
-
 ## Run
 1) File > Import (or File > Open) and select a media file (mp4/mov/mkv/avi/mp3/wav).
 2) Double-click the imported tile to place it on the timeline.
