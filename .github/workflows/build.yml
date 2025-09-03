@@ -23,7 +23,7 @@ jobs:
       uses: microsoft/setup-msbuild@v2
     
     - name: Build Solution
-      run: msbuild *.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:TreatWarningsAsErrors=false /p:WarningLevel=1 /maxcpucount
+      run: msbuild NWPVideoEditor.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:TreatWarningsAsErrors=false /p:WarningLevel=1 /maxcpucount
     
     - name: Upload Release Artifacts
       uses: actions/upload-artifact@v4
