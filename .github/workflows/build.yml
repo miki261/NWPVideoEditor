@@ -22,25 +22,6 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
     
-    - name: Setup NuGet
-      uses: NuGet/setup-nuget@v1
-      with:
-        nuget-version: 'latest'
-    
-    - name: Check for NuGet dependencies
-      run: |
-        if (Test-Path "packages.config" -PathType Leaf) {
-          Write-Host "Found packages.config - proceeding with NuGet restore"
-          nuget restore *.sln
-        } elseif (Get-ChildItem -Recurse -Filter "*.csproj") {
-          Write-Host "Found .csproj files - proceeding with NuGet restore" 
-          nuget restore *.sln
-        } else {
-          Write-Host "No NuGet dependencies found - skipping restore"
-        }
-      shell: powershell
-      continue-on-error: true
-    
     - name: Build Solution
       run: msbuild *.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:TreatWarningsAsErrors=false /p:WarningLevel=1 /maxcpucount
     
@@ -54,14 +35,3 @@ jobs:
           **/bin/Release/**/*.dll
           **/bin/Release/**/*.pdb
         retention-days: 30
-    
-    - name: Upload Debug Artifacts
-      uses: actions/upload-artifact@v4
-      if: matrix.configuration == 'Debug'
-      with:
-        name: NWPVideoEditor-${{ matrix.platform }}-Debug
-        path: |
-          **/bin/Debug/**/*.exe
-          **/bin/Debug/**/*.dll
-          **/bin/Debug/**/*.pdb
-        retention-days: 7
