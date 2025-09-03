@@ -1,0 +1,55 @@
+name: Build NWPVideoEditor
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+        platform: [x86, x64]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+    
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1
+    
+    - name: Restore NuGet packages
+      run: nuget restore *.sln
+      continue-on-error: true
+    
+    - name: Build Solution
+      run: msbuild *.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:TreatWarningsAsErrors=false /p:WarningLevel=1
+    
+    - name: Upload Release Artifacts
+      uses: actions/upload-artifact@v4
+      if: matrix.configuration == 'Release'
+      with:
+        name: NWPVideoEditor-${{ matrix.platform }}-Release
+        path: |
+          **/bin/Release/**/*.exe
+          **/bin/Release/**/*.dll
+          **/bin/Release/**/*.pdb
+        retention-days: 30
+    
+    - name: Upload Debug Artifacts
+      uses: actions/upload-artifact@v4
+      if: matrix.configuration == 'Debug'
+      with:
+        name: NWPVideoEditor-${{ matrix.platform }}-Debug
+        path: |
+          **/bin/Debug/**/*.exe
+          **/bin/Debug/**/*.dll
+          **/bin/Debug/**/*.pdb
+        retention-days: 7
