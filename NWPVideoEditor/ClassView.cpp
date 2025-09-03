@@ -1,4 +1,3 @@
-
 #include "pch.h"
 #include "framework.h"
 #include "MainFrm.h"
@@ -33,10 +32,6 @@ public:
 
 IMPLEMENT_SERIAL(CClassViewMenuButton, CMFCToolBarMenuButton, 1)
 
-//////////////////////////////////////////////////////////////////////
-// Construction/Destruction
-//////////////////////////////////////////////////////////////////////
-
 CClassView::CClassView() noexcept
 {
 	m_nCurrSort = ID_SORTING_GROUPBYTYPE;
@@ -61,9 +56,6 @@ BEGIN_MESSAGE_MAP(CClassView, CDockablePane)
 	ON_UPDATE_COMMAND_UI_RANGE(ID_SORTING_GROUPBYTYPE, ID_SORTING_SORTBYACCESS, OnUpdateSort)
 END_MESSAGE_MAP()
 
-/////////////////////////////////////////////////////////////////////////////
-// CClassView message handlers
-
 int CClassView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
 	if (CDockablePane::OnCreate(lpCreateStruct) == -1)
@@ -72,18 +64,16 @@ int CClassView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	CRect rectDummy;
 	rectDummy.SetRectEmpty();
 
-	// Create views:
 	const DWORD dwViewStyle = WS_CHILD | WS_VISIBLE | TVS_HASLINES | TVS_LINESATROOT | TVS_HASBUTTONS | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
 
 	if (!m_wndClassView.Create(dwViewStyle, rectDummy, this, 2))
 	{
 		TRACE0("Failed to create Class View\n");
-		return -1;      // fail to create
+		return -1;
 	}
 
-	// Load images:
 	m_wndToolBar.Create(this, AFX_DEFAULT_TOOLBAR_STYLE, IDR_SORT);
-	m_wndToolBar.LoadToolBar(IDR_SORT, 0, 0, TRUE /* Is locked */);
+	m_wndToolBar.LoadToolBar(IDR_SORT, 0, 0, TRUE);
 
 	OnChangeVisualStyle();
 
@@ -91,7 +81,6 @@ int CClassView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_wndToolBar.SetPaneStyle(m_wndToolBar.GetPaneStyle() & ~(CBRS_GRIPPER | CBRS_SIZE_DYNAMIC | CBRS_BORDER_TOP | CBRS_BORDER_BOTTOM | CBRS_BORDER_LEFT | CBRS_BORDER_RIGHT));
 
 	m_wndToolBar.SetOwner(this);
-
 	m_wndToolBar.SetRouteCommandsViaFrame(FALSE);
 
 	CMenu menuSort;
@@ -99,7 +88,7 @@ int CClassView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	m_wndToolBar.ReplaceButton(ID_SORT_MENU, CClassViewMenuButton(menuSort.GetSubMenu(0)->GetSafeHmenu()));
 
-	CClassViewMenuButton* pButton =  DYNAMIC_DOWNCAST(CClassViewMenuButton, m_wndToolBar.GetButton(0));
+	CClassViewMenuButton* pButton = DYNAMIC_DOWNCAST(CClassViewMenuButton, m_wndToolBar.GetButton(0));
 
 	if (pButton != nullptr)
 	{
@@ -110,7 +99,6 @@ int CClassView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	}
 
 	FillClassView();
-
 	return 0;
 }
 
@@ -171,7 +159,6 @@ void CClassView::OnContextMenu(CWnd* pWnd, CPoint point)
 
 	if (point != CPoint(-1, -1))
 	{
-		// Select clicked item:
 		CPoint ptTree = point;
 		pWndTree->ScreenToClient(&ptTree);
 
@@ -204,9 +191,7 @@ void CClassView::OnContextMenu(CWnd* pWnd, CPoint point)
 void CClassView::AdjustLayout()
 {
 	if (GetSafeHwnd() == nullptr)
-	{
 		return;
-	}
 
 	CRect rectClient;
 	GetClientRect(rectClient);
@@ -225,13 +210,11 @@ BOOL CClassView::PreTranslateMessage(MSG* pMsg)
 void CClassView::OnSort(UINT id)
 {
 	if (m_nCurrSort == id)
-	{
 		return;
-	}
 
 	m_nCurrSort = id;
 
-	CClassViewMenuButton* pButton =  DYNAMIC_DOWNCAST(CClassViewMenuButton, m_wndToolBar.GetButton(0));
+	CClassViewMenuButton* pButton = DYNAMIC_DOWNCAST(CClassViewMenuButton, m_wndToolBar.GetButton(0));
 
 	if (pButton != nullptr)
 	{
@@ -270,7 +253,7 @@ void CClassView::OnNewFolder()
 
 void CClassView::OnPaint()
 {
-	CPaintDC dc(this); // device context for painting
+	CPaintDC dc(this);
 
 	CRect rectTree;
 	m_wndClassView.GetWindowRect(rectTree);
@@ -283,7 +266,6 @@ void CClassView::OnPaint()
 void CClassView::OnSetFocus(CWnd* pOldWnd)
 {
 	CDockablePane::OnSetFocus(pOldWnd);
-
 	m_wndClassView.SetFocus();
 }
 
@@ -305,7 +287,6 @@ void CClassView::OnChangeVisualStyle()
 	bmp.GetBitmap(&bmpObj);
 
 	UINT nFlags = ILC_MASK;
-
 	nFlags |= (theApp.m_bHiColorIcons) ? ILC_COLOR24 : ILC_COLOR4;
 
 	m_ClassViewImages.Create(16, bmpObj.bmHeight, nFlags, 0, 0);
@@ -314,5 +295,11 @@ void CClassView::OnChangeVisualStyle()
 	m_wndClassView.SetImageList(&m_ClassViewImages, TVSIL_NORMAL);
 
 	m_wndToolBar.CleanUpLockedImages();
-	m_wndToolBar.LoadBitmap(theApp.m_bHiColorIcons ? IDB_SORT_24 : IDR_SORT, 0, 0, TRUE /* Locked */);
+	m_wndToolBar.LoadBitmap(theApp.m_bHiColorIcons ? IDB_SORT_24 : IDR_SORT, 0, 0, TRUE);
+}
+
+// FIXED - Add the missing OnChangeActiveTab method
+LRESULT CClassView::OnChangeActiveTab(WPARAM, LPARAM)
+{
+	return 0;
 }

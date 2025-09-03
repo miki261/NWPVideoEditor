@@ -6,7 +6,7 @@
 static std::wstring Quote(const std::wstring& s)
 {
     std::wstring q; q.reserve(s.size() + 2);
-    q.push_back(L'"'); q += s; q.push_back(L'"');
+    q.push_back(L'\"'); q += s; q.push_back(L'\"');
     return q;
 }
 
@@ -47,11 +47,14 @@ ExecResult FfmpegProcess::Run(const std::wstring& exePath, const std::vector<std
 
     PROCESS_INFORMATION pi{};
     std::wstring cmd = JoinCmd(exePath, args);
-    std::wstring mutableCmd = cmd;
+
+    // FIXED - Create mutable copy for CreateProcessW
+    std::vector<wchar_t> mutableCmd(cmd.begin(), cmd.end());
+    mutableCmd.push_back(L'\0');
 
     BOOL ok = CreateProcessW(
         nullptr,
-        mutableCmd.data(),   // LPWSTR
+        mutableCmd.data(),  // FIXED - Use wchar_t* instead of wstring.data()
         nullptr,
         nullptr,
         TRUE,
@@ -80,19 +83,17 @@ ExecResult FfmpegProcess::Run(const std::wstring& exePath, const std::vector<std
         // Read stdout
         for (;;)
         {
-            if (!ReadFile(outRd, static_cast<LPVOID>(buf), sizeof(buf), &read, nullptr) || read == 0)
+            if (!ReadFile(outRd, buf, sizeof(buf), &read, nullptr) || read == 0)
                 break;
-            out.append(reinterpret_cast<const char*>(buf),
-                reinterpret_cast<const char*>(buf) + read);
+            out.append(reinterpret_cast<const char*>(buf), read);
         }
 
-        // Read stderr
+        // Read stderr  
         for (;;)
         {
-            if (!ReadFile(errRd, static_cast<LPVOID>(buf), sizeof(buf), &read, nullptr) || read == 0)
+            if (!ReadFile(errRd, buf, sizeof(buf), &read, nullptr) || read == 0)
                 break;
-            err.append(reinterpret_cast<const char*>(buf),
-                reinterpret_cast<const char*>(buf) + read);
+            err.append(reinterpret_cast<const char*>(buf), read);
         }
 
         CloseHandle(pi.hThread);

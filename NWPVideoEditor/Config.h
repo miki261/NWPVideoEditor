@@ -1,7 +1,6 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <optional>
 #include <unordered_map>
 
 struct RenderProfile {
@@ -24,15 +23,14 @@ public:
 
     EditorConfig(const EditorConfig&) = default;
     EditorConfig& operator=(const EditorConfig&) = default;
-    EditorConfig(EditorConfig&&) noexcept = default;
-    EditorConfig& operator=(EditorConfig&&) noexcept = default;
 
     std::wstring FfmpegExePath() const;
     std::wstring FfprobeExePath() const;
     const RenderProfile* GetProfile(const std::string& name) const;
     const std::vector<std::wstring>& DefaultArgs() const;
 
-    static std::optional<EditorConfig> LoadFromFile(const std::wstring& path);
+    // FIXED - No more std::optional!
+    static bool LoadFromFile(const std::wstring& path, EditorConfig& config);
 
 private:
     std::wstring m_binDir;

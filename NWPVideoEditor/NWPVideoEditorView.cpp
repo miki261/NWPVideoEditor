@@ -1,4 +1,5 @@
 ﻿#include "pch.h"
+#include "framework.h"
 #include "NWPVideoEditor.h"
 #include "NWPVideoEditorDoc.h"
 #include "NWPVideoEditorView.h"
@@ -219,76 +220,53 @@ void NWPVideoEditorView::DrawTimeline(CDC* pDC)
     pDC->FillSolidRect(clipR, RGB(70, 120, 220));
     pDC->FrameRect(clipR, &CBrush(RGB(30, 60, 140)));
 
-    // Resize handle
+    // Right resize handle
     CRect handleR(clipR.right - 8, clipR.top, clipR.right, clipR.bottom);
-    pDC->FillSolidRect(handleR, RGB(255, 255, 255));
+    pDC->FillSolidRect(handleR, RGB(160, 200, 255));
+
+    // Duration text
+    CString durText;
+    durText.Format(_T("%.1fs"), m_activeClipLenSec);
+    CRect textR = clipR;
+    textR.DeflateRect(4, 2);
+    pDC->SetBkMode(TRANSPARENT);
+    pDC->SetTextColor(RGB(255, 255, 255));
+    pDC->DrawText(durText, textR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
     // Overlays
-    for (const auto& ov : m_overlays)
-    {
-        int span = (int)((right - left) * 0.70);
-        int x1 = left + (int)(span * (ov.startSec / max(1.0, m_activeClipLenSec)));
-        int x2 = left + (int)(span * ((ov.startSec + ov.durSec) / max(1.0, m_activeClipLenSec)));
-        CRect ovR(x1, clipR.top + 6, x2, clipR.bottom - 6);
-        pDC->FillSolidRect(ovR, RGB(40, 170, 90));
-        pDC->SetTextColor(RGB(10, 10, 10));
-        pDC->TextOut(ovR.left + 4, ovR.top + 2, ov.text);
+    for (const auto& ov : m_overlays) {
+        int x1 = XForSec(ov.startSec);
+        int x2 = XForSec(ov.startSec + ov.durSec);
+        if (x2 > x1) {
+            CRect ovR(x1, r.bottom - 24, x2, r.bottom - 4);
+            pDC->FillSolidRect(ovR, RGB(255, 200, 100));
+            pDC->FrameRect(ovR, &CBrush(RGB(200, 160, 80)));
+
+            pDC->SetTextColor(RGB(0, 0, 0));
+            pDC->DrawText(ov.text, ovR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
     }
-
-    // Length label
-    CString len; len.Format(_T("Length: %.2f s"), m_activeClipLenSec);
-    pDC->SetTextColor(RGB(230, 230, 230));
-    pDC->TextOut(clipR.left, clipR.bottom + 4, len);
 }
-
-void NWPVideoEditorView::OnEditAddText()
-{
-    if (m_activeClipPath.IsEmpty()) { AfxMessageBox(_T("Place a clip on the timeline first (double-click a clip).")); return; }
-
-    OverlayItem ov;
-    ov.text = _T("Sample Text");
-    ov.startSec = 0.5;
-    ov.durSec = min(3.0, max(0.5, m_activeClipLenSec - 0.5));
-    m_overlays.push_back(ov);
-    InvalidateRect(m_rcTimeline, FALSE);
-}
-
-BOOL NWPVideoEditorView::OnPreparePrinting(CPrintInfo* pInfo) { return DoPreparePrinting(pInfo); }
-void NWPVideoEditorView::OnBeginPrinting(CDC*, CPrintInfo*) {}
-void NWPVideoEditorView::OnEndPrinting(CDC*, CPrintInfo*) {}
-
-#ifdef _DEBUG
-void NWPVideoEditorView::AssertValid() const { CView::AssertValid(); }
-void NWPVideoEditorView::Dump(CDumpContext& dc) const { CView::Dump(dc); }
-#endif
 
 void NWPVideoEditorView::OnFileExport()
 {
-    if (m_activeClipPath.IsEmpty()) { AfxMessageBox(_T("Place a clip on the timeline first.")); return; }
+    if (m_activeClipPath.IsEmpty()) {
+        AfxMessageBox(L"Place a clip on the timeline first.");
+        return;
+    }
 
-    // Choose output file
-    CFileDialog sfd(FALSE, _T("mp4"), _T("output.mp4"), OFN_OVERWRITEPROMPT, _T("MP4 video|*.mp4||"));
+    CFileDialog sfd(FALSE, L"mp4", L"output.mp4", OFN_OVERWRITEPROMPT,
+        L"MP4 video|*.mp4||");
     if (sfd.DoModal() != IDOK) return;
     CString out = sfd.GetPathName();
 
-    // Build drawtext chain from overlays
-    CStringA draw;
-    for (size_t i = 0; i < m_overlays.size(); ++i)
-    {
-        const auto& ov = m_overlays[i];
-        CStringA part; part.Format("drawtext=text='%s':x=10:y=10:fontsize=32:fontcolor=white:enable='between(t,%.2f,%.2f)'",
-            CStringA(ov.text), ov.startSec, ov.startSec + ov.durSec);
-        if (i > 0) draw += ",";
-        draw += part;
-    }
-
+    // Simple ffmpeg command
     CStringA inA(m_activeClipPath);
     CStringA outA(out);
-    CStringA vf = draw.IsEmpty() ? CStringA("") : CStringA("-vf \"") + draw + "\"";
 
     CStringA ff;
-    ff.Format("ffmpeg -y -i \"%s\" %s -t %.2f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
-        inA.GetString(), vf.GetString(), m_activeClipLenSec, outA.GetString());
+    ff.Format("ffmpeg -y -i \"%s\" -t %.2f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
+        inA.GetString(), m_activeClipLenSec, outA.GetString());
 
     std::string wrapper = std::string("cmd /C ") + ff.GetString();
     std::vector<char> mutableCmd(wrapper.begin(), wrapper.end());
@@ -296,13 +274,59 @@ void NWPVideoEditorView::OnFileExport()
 
     STARTUPINFOA si{}; si.cb = sizeof(si);
     PROCESS_INFORMATION pi{};
-    BOOL ok = CreateProcessA(nullptr, mutableCmd.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-    if (!ok) { AfxMessageBox(_T("Failed to start ffmpeg. Ensure it's in PATH.")); return; }
+    BOOL ok = CreateProcessA(nullptr, mutableCmd.data(), nullptr, nullptr, FALSE,
+        CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    if (!ok) { AfxMessageBox(L"Failed to start ffmpeg. Ensure it's in PATH."); return; }
 
     WaitForSingleObject(pi.hProcess, INFINITE);
     DWORD exitCode = 0; GetExitCodeProcess(pi.hProcess, &exitCode);
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
 
-    if (exitCode == 0) AfxMessageBox(_T("Export finished."));
-    else AfxMessageBox(_T("Export failed."));
+    if (exitCode == 0) AfxMessageBox(L"Export finished.");
+    else AfxMessageBox(L"Export failed.");
 }
+
+void NWPVideoEditorView::OnEditAddText()
+{
+    CString text = L"Sample Text";
+    if (AfxMessageBox(L"Add text overlay?", MB_YESNO) == IDYES) {
+        OverlayItem ov;
+        ov.text = text;
+        ov.startSec = 2.0;
+        ov.durSec = 3.0;
+        m_overlays.push_back(ov);
+        InvalidateRect(m_rcTimeline, FALSE);
+    }
+}
+
+BOOL NWPVideoEditorView::OnPreparePrinting(CPrintInfo* pInfo)
+{
+    return DoPreparePrinting(pInfo);
+}
+
+void NWPVideoEditorView::OnBeginPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/)
+{
+}
+
+void NWPVideoEditorView::OnEndPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/)
+{
+}
+
+#ifdef _DEBUG
+void NWPVideoEditorView::AssertValid() const
+{
+    CView::AssertValid();
+}
+
+void NWPVideoEditorView::Dump(CDumpContext& dc) const
+{
+    CView::Dump(dc);
+}
+
+// FIXED - Debug version of GetDocument
+CNWPVideoEditorDoc* NWPVideoEditorView::GetDocument() const
+{
+    ASSERT(m_pDocument->IsKindOf(RUNTIME_CLASS(CNWPVideoEditorDoc)));
+    return (CNWPVideoEditorDoc*)m_pDocument;
+}
+#endif
