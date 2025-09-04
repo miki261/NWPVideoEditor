@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <vector>
+#include <gdiplus.h>
 #include "afxcmn.h"
 
 struct ClipItem {
@@ -34,6 +35,12 @@ public:
     CImageList  m_imgLarge;
     std::vector<ClipItem> m_importedClips; // Renamed from m_timeline
 
+    // Preview window
+    CRect       m_rcPreview;            // Preview rectangle
+    HBITMAP     m_hPreviewBitmap;       // Current preview frame
+    CString     m_currentPreviewPath;   // Currently previewed file
+    double      m_previewTimePosition;  // Current time position in preview
+
     // Timeline model - changed to support multiple clips
     std::vector<TimelineClip> m_timelineClips;
     int m_activeTimelineClipIndex = -1; // Index of currently selected timeline clip
@@ -58,7 +65,7 @@ public:
     // Timeline settings
     double m_timelineDurationSec = 60.0; // Total timeline duration
     double m_timelineScrollOffset = 0.0;
-    int m_contextMenuClipIndex = -1;
+    int m_contextMenuClipIndex = -1;  // tracks which clip was right-clicked
 
 public:
     virtual void OnDraw(CDC* pDC);
@@ -93,11 +100,17 @@ protected:
     afx_msg void OnTimelineRemoveClip();
     DECLARE_MESSAGE_MAP()
 
-
 private:
     int  AddShellIconForFile(const CString& path);
     void Layout(int cx, int cy);
     void DrawTimeline(CDC* pDC);
+    void DrawPreviewFrame(CDC* pDC);
+    void UpdatePreview();
+    void LoadPreviewFrame(const CString& filePath, double timePosition);
+    void LoadImageFromFile(const CString& imagePath);
+    void LoadBitmapFromFile(const CString& imagePath);
+    void CreateBlackFrame();
+    void ClearPreview();
     void SetActiveClipFromSelection();
     int  HitTestTimelineHandle(CPoint pt) const;
     int  HitTestTimelineClip(CPoint pt) const;
@@ -108,7 +121,6 @@ private:
     // Helper functions for drag-drop
     BOOL IsOverTimeline(CPoint screenPt);
     void AddClipToTimeline(const CString& clipPath);
-
 };
 
 #ifndef _DEBUG  // debug version in NWPVideoEditorView.cpp
