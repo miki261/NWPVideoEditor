@@ -88,6 +88,7 @@
 #define ID_FILE_IMPORT                  32811
 #define ID_FILE_EXPORT                  32812
 #define ID_EDIT_ADDTEXT					32813
+#define ID_TIMELINE_REMOVE_CLIP			32814
 
 #ifndef IDI_CLASS_FOLDER_CLOSED  
 #define IDI_CLASS_FOLDER_CLOSED     3001
