@@ -1,6 +1,5 @@
 ﻿#pragma once
 #include <vector>
-#include <gdiplus.h>
 #include "afxcmn.h"
 
 struct ClipItem {
@@ -107,8 +106,8 @@ private:
     void DrawPreviewFrame(CDC* pDC);
     void UpdatePreview();
     void LoadPreviewFrame(const CString& filePath, double timePosition);
-    void LoadImageFromFile(const CString& imagePath);
     void LoadBitmapFromFile(const CString& imagePath);
+    void CreateTestFrame(const CString& filePath, double timePosition);
     void CreateBlackFrame();
     void ClearPreview();
     void SetActiveClipFromSelection();

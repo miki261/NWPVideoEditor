@@ -9,9 +9,6 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <gdiplus.h>
-
-using namespace Gdiplus;
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -792,9 +789,9 @@ void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC)
         BITMAP bmp;
         GetObject(m_hPreviewBitmap, sizeof(BITMAP), &bmp);
 
-        // The bitmap should already be sized correctly (480x360) from FFmpeg
-        pDC->BitBlt(innerRect.left, innerRect.top, innerRect.Width(), innerRect.Height(),
-            &memDC, 0, 0, SRCCOPY);
+        // Scale to fit the preview window
+        pDC->StretchBlt(innerRect.left, innerRect.top, innerRect.Width(), innerRect.Height(),
+            &memDC, 0, 0, bmp.bmWidth, bmp.bmHeight, SRCCOPY);
 
         memDC.SelectObject(oldBitmap);
     }
@@ -852,14 +849,6 @@ void NWPVideoEditorView::UpdatePreview()
     }
 }
 
-void NWPVideoEditorView::LoadBitmapFromFile(const CString& imagePath)
-{
-    // Load BMP directly using Windows API
-    m_hPreviewBitmap = (HBITMAP)LoadImage(NULL, imagePath, IMAGE_BITMAP, 0, 0,
-        LR_LOADFROMFILE | LR_CREATEDIBSECTION);
-}
-
-
 void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePosition)
 {
     m_currentPreviewPath = filePath;
@@ -871,27 +860,21 @@ void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePo
         m_hPreviewBitmap = nullptr;
     }
 
-    // Generate unique temp file path
+    // Generate unique temp file path for BMP
     TCHAR tempPath[MAX_PATH];
     GetTempPath(MAX_PATH, tempPath);
     CString tempImagePath;
     tempImagePath.Format(_T("%stemp_frame_%d.bmp"), tempPath, GetTickCount());
 
-    // Use FFmpeg to extract frame - CORRECTED COMMAND
+    // Use FFmpeg to extract frame as BMP (works better on CI/CD)
     CStringA pathA(filePath);
     CStringA tempImagePathA(tempImagePath);
     CStringA cmd;
 
-    // Use a more reliable FFmpeg command that avoids black frames
-    if (timePosition < 1.0) {
-        // For positions less than 1 second, seek to 1 second to avoid black intro frames
-        cmd.Format("ffmpeg -y -ss 1.0 -i \"%s\" -vframes 1 -vf \"scale=480:360:force_original_aspect_ratio=decrease,pad=480:360:(ow-iw)/2:(oh-ih)/2:black\" \"%s\"",
-            pathA.GetString(), tempImagePathA.GetString());
-    }
-    else {
-        cmd.Format("ffmpeg -y -ss %.3f -i \"%s\" -vframes 1 -vf \"scale=480:360:force_original_aspect_ratio=decrease,pad=480:360:(ow-iw)/2:(oh-ih)/2:black\" \"%s\"",
-            timePosition, pathA.GetString(), tempImagePathA.GetString());
-    }
+    // Simple FFmpeg command - avoid seeking too early to prevent black frames
+    double seekTime = max(1.0, timePosition);
+    cmd.Format("ffmpeg -y -ss %.3f -i \"%s\" -vframes 1 -s 480x360 \"%s\"",
+        seekTime, pathA.GetString(), tempImagePathA.GetString());
 
     std::string wrapper = std::string("cmd /C ") + cmd.GetString() + " >nul 2>&1";
     std::vector<char> mutableCmd(wrapper.begin(), wrapper.end());
@@ -913,7 +896,7 @@ void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePo
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
 
-        // Check if file was created and load it
+        // Try to load the BMP file using only Windows API
         if (GetFileAttributes(tempImagePath) != INVALID_FILE_ATTRIBUTES)
         {
             LoadBitmapFromFile(tempImagePath);
@@ -923,32 +906,72 @@ void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePo
         DeleteFile(tempImagePath);
     }
 
-    // If we don't have a bitmap at this point, create a black frame
+    // If we don't have a bitmap, create a test pattern
     if (!m_hPreviewBitmap)
     {
-        CreateBlackFrame();
+        CreateTestFrame(filePath, timePosition);
     }
 
     InvalidateRect(m_rcPreview, FALSE);
 }
 
-
-void NWPVideoEditorView::LoadImageFromFile(const CString& imagePath)
+void NWPVideoEditorView::LoadBitmapFromFile(const CString& imagePath)
 {
-    // Use GDI+ to load the JPEG image
-    Bitmap* pBitmap = new Bitmap(imagePath);
+    // Use only Windows API to load BMP files
+    m_hPreviewBitmap = (HBITMAP)LoadImage(NULL, imagePath, IMAGE_BITMAP,
+        0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
+}
 
-    if (pBitmap && pBitmap->GetLastStatus() == Ok)
-    {
-        // Convert GDI+ bitmap to HBITMAP
-        Color bgColor(0, 0, 0); // Black background
-        pBitmap->GetHBITMAP(bgColor, &m_hPreviewBitmap);
+void NWPVideoEditorView::CreateTestFrame(const CString& filePath, double timePosition)
+{
+    CClientDC dc(this);
+    CDC memDC;
+    memDC.CreateCompatibleDC(&dc);
+
+    m_hPreviewBitmap = CreateCompatibleBitmap(dc, 480, 360);
+    HBITMAP oldBitmap = (HBITMAP)memDC.SelectObject(m_hPreviewBitmap);
+
+    // Create a colorful test pattern instead of black
+    memDC.FillSolidRect(0, 0, 480, 360, RGB(40, 40, 60));
+
+    // Draw a test pattern
+    CPen redPen(PS_SOLID, 2, RGB(255, 100, 100));
+    CPen* oldPen = memDC.SelectObject(&redPen);
+
+    // Draw some lines to show it's working
+    for (int i = 0; i < 480; i += 40) {
+        memDC.MoveTo(i, 0);
+        memDC.LineTo(i, 360);
+    }
+    for (int j = 0; j < 360; j += 30) {
+        memDC.MoveTo(0, j);
+        memDC.LineTo(480, j);
     }
 
-    if (pBitmap)
-    {
-        delete pBitmap;
-    }
+    memDC.SelectObject(oldPen);
+
+    // Draw text info
+    memDC.SetTextColor(RGB(255, 255, 255));
+    memDC.SetBkMode(TRANSPARENT);
+
+    CString filename = filePath;
+    int lastSlash = filename.ReverseFind('\\');
+    if (lastSlash != -1) filename = filename.Mid(lastSlash + 1);
+
+    CRect titleRect(20, 150, 460, 190);
+    memDC.DrawText(filename, titleRect, DT_CENTER | DT_VCENTER | DT_WORDBREAK);
+
+    CString timeText;
+    timeText.Format(_T("Time: %.2fs"), timePosition);
+    CRect timeRect(20, 200, 460, 230);
+    memDC.DrawText(timeText, timeRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    CString statusText = _T("FFmpeg frame extraction failed");
+    CRect statusRect(20, 250, 460, 280);
+    memDC.SetTextColor(RGB(255, 200, 100));
+    memDC.DrawText(statusText, statusRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    memDC.SelectObject(oldBitmap);
 }
 
 void NWPVideoEditorView::CreateBlackFrame()
