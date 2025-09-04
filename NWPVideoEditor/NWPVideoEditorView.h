@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <vector>
+#include "afxcmn.h"
 
 struct ClipItem {
     CString path;
@@ -16,7 +17,6 @@ protected:
     DECLARE_DYNCREATE(NWPVideoEditorView)
 
 public:
-    // FIXED - Add GetDocument declaration
     CNWPVideoEditorDoc* GetDocument() const;
 
     // Media grid
@@ -27,14 +27,23 @@ public:
     // Timeline model
     CString m_activeClipPath;
     double  m_activeClipLenSec = 10.0;
+    double  m_activeClipStartSec = 0.0;
+    double  m_originalClipDuration = 30.0;
     CRect   m_rcTimeline;
-
     struct OverlayItem { CString text; double startSec; double durSec; };
     std::vector<OverlayItem> m_overlays;
 
-    bool   m_draggingLength = false;
-    double m_dragStartSec = 0.0;
+    // Dragging states
+    enum DragState { DRAG_NONE, DRAG_LEFT_HANDLE, DRAG_RIGHT_HANDLE, DRAG_CLIPS };
+    DragState m_dragState = DRAG_NONE;
     CPoint m_dragStart{};
+    double m_dragStartClipStart = 0.0;
+    double m_dragStartClipLength = 0.0;
+
+    // Drag-drop members for clip list
+    int m_nDragIndex = -1;
+    BOOL m_bDragging = FALSE;
+    CImageList* m_pDragImage = nullptr;
 
 public:
     virtual void OnDraw(CDC* pDC);
@@ -61,11 +70,11 @@ protected:
     afx_msg void OnMouseMove(UINT nFlags, CPoint pt);
     afx_msg void OnLButtonUp(UINT nFlags, CPoint pt);
 
-    // Grid activation - timeline
+    // List control event handlers
     afx_msg void OnListDblClk(NMHDR* pNMHDR, LRESULT* pResult);
     afx_msg void OnListItemActivate(NMHDR* pNMHDR, LRESULT* pResult);
+    afx_msg void OnListBeginDrag(NMHDR* pNMHDR, LRESULT* pResult);
 
-    // Add Text command
     afx_msg void OnEditAddText();
 
     DECLARE_MESSAGE_MAP()
@@ -76,9 +85,12 @@ private:
     void DrawTimeline(CDC* pDC);
     void SetActiveClipFromSelection();
     int  HitTestTimelineHandle(CPoint pt) const;
+
+    // Helper functions for drag-drop
+    BOOL IsOverTimeline(CPoint screenPt);
+    void AddClipToTimeline(const CString& clipPath);
 };
 
-// FIXED - GetDocument implementation for Release builds
 #ifndef _DEBUG  // debug version in NWPVideoEditorView.cpp
 inline CNWPVideoEditorDoc* NWPVideoEditorView::GetDocument() const
 {
