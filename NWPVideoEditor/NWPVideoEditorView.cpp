@@ -22,6 +22,7 @@ BEGIN_MESSAGE_MAP(NWPVideoEditorView, CView)
     ON_COMMAND(ID_FILE_IMPORT, OnFileImport)
     ON_COMMAND(ID_FILE_OPEN, OnFileImport)
     ON_COMMAND(ID_FILE_EXPORT, OnFileExport)
+    ON_COMMAND(ID_FILE_SAVE, OnFileSave)
     ON_COMMAND(ID_EDIT_ADDTEXT, OnEditAddText)
     ON_NOTIFY(NM_DBLCLK, 1001, OnListDblClk)
     ON_NOTIFY(LVN_ITEMACTIVATE, 1001, OnListItemActivate)
@@ -31,6 +32,7 @@ BEGIN_MESSAGE_MAP(NWPVideoEditorView, CView)
     ON_WM_LBUTTONUP()
     ON_WM_RBUTTONDOWN()
     ON_COMMAND(ID_TIMELINE_REMOVE_CLIP, OnTimelineRemoveClip)
+    ON_COMMAND(ID_TIMELINE_SPLIT_CLIP, OnTimelineSplitClip)
     ON_COMMAND(ID_FILE_PRINT, &CView::OnFilePrint)
     ON_COMMAND(ID_FILE_PRINT_DIRECT, &CView::OnFilePrint)
     ON_COMMAND(ID_FILE_PRINT_PREVIEW, &CView::OnFilePrintPreview)
@@ -49,8 +51,6 @@ NWPVideoEditorView::~NWPVideoEditorView()
         delete m_pDragImage;
         m_pDragImage = nullptr;
     }
-
-    // Clean up preview bitmap
     if (m_hPreviewBitmap)
     {
         DeleteObject(m_hPreviewBitmap);
@@ -76,7 +76,6 @@ int NWPVideoEditorView::OnCreate(LPCREATESTRUCT cs)
     if (!m_imgLarge.Create(96, 96, ILC_COLOR32 | ILC_MASK, 1, 32)) return -1;
     m_list.SetImageList(&m_imgLarge, LVSIL_NORMAL);
 
-    // Initialize preview area (this will be set properly in Layout)
     m_rcPreview = CRect(0, 0, 480, 360);
 
     return 0;
@@ -97,17 +96,14 @@ void NWPVideoEditorView::Layout(int cx, int cy)
 
     if (m_list.GetSafeHwnd())
     {
-        // Media list takes left portion
         int listWidth = cx - previewW - margin * 3;
         m_list.MoveWindow(margin, margin, listWidth, cy - timelineH - margin * 2);
     }
 
-    // Set preview rectangle (no control to move)
     int previewX = cx - previewW - margin;
     int previewY = margin;
     m_rcPreview = CRect(previewX, previewY, previewX + previewW, previewY + previewH);
 
-    // Timeline at the bottom, full width
     m_rcTimeline = CRect(margin, cy - timelineH, cx - margin, cy - margin);
     Invalidate(FALSE);
 }
@@ -126,19 +122,17 @@ int NWPVideoEditorView::AddShellIconForFile(const CString& path)
 
 void NWPVideoEditorView::OnFileImport()
 {
-    // Buffer for multiple file selection
     const int MAX_FILES = 100;
     const int BUFFER_SIZE = MAX_FILES * MAX_PATH + 1;
 
     CString fileBuffer;
     TCHAR* pBuffer = fileBuffer.GetBuffer(BUFFER_SIZE);
-    pBuffer[0] = '\0';  // Initialize buffer
+    pBuffer[0] = '\0';
 
     CFileDialog dlg(TRUE, NULL, NULL,
         OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER,
         _T("Media Files|*.mp4;*.mov;*.mkv;*.avi;*.mp3;*.wav|All Files|*.*||"));
 
-    // Set up the buffer for multiple selection
     dlg.m_ofn.lpstrFile = pBuffer;
     dlg.m_ofn.nMaxFile = BUFFER_SIZE;
 
@@ -150,7 +144,6 @@ void NWPVideoEditorView::OnFileImport()
 
     fileBuffer.ReleaseBuffer();
 
-    // Use the MFC helper functions to get multiple selected files
     POSITION pos = dlg.GetStartPosition();
     std::vector<CString> selectedFiles;
 
@@ -160,13 +153,11 @@ void NWPVideoEditorView::OnFileImport()
         selectedFiles.push_back(filePath);
     }
 
-    // Import each selected file
     for (const CString& filePath : selectedFiles)
     {
         ClipItem ci;
         ci.path = filePath;
         ci.iImage = AddShellIconForFile(ci.path);
-        // Get actual video duration instead of hardcoding
         ci.durationSec = GetVideoDuration(ci.path);
         m_importedClips.push_back(ci);
 
@@ -177,17 +168,14 @@ void NWPVideoEditorView::OnFileImport()
         int img = (ci.iImage >= 0) ? ci.iImage : 0;
         int row = m_list.InsertItem(m_list.GetItemCount(), name, img);
 
-        // Only select the last added item
         if (filePath == selectedFiles.back())
         {
             m_list.SetItemState(row, LVIS_SELECTED, LVIS_SELECTED);
         }
     }
 
-    // UPDATE PREVIEW after importing
     UpdatePreview();
 
-    // Show a message about how many files were imported
     if (selectedFiles.size() > 1)
     {
         CString message;
@@ -204,15 +192,13 @@ void NWPVideoEditorView::OnRButtonDown(UINT nFlags, CPoint point)
         return;
     }
 
-    // Check if we right-clicked on a timeline clip
     int hitClipIndex = HitTestTimelineClip(point);
     if (hitClipIndex >= 0)
     {
         m_contextMenuClipIndex = hitClipIndex;
-        m_activeTimelineClipIndex = hitClipIndex;  // Select the clip
+        m_activeTimelineClipIndex = hitClipIndex;
         InvalidateRect(m_rcTimeline, FALSE);
 
-        // Create context menu
         CMenu contextMenu;
         contextMenu.CreatePopupMenu();
 
@@ -220,11 +206,22 @@ void NWPVideoEditorView::OnRButtonDown(UINT nFlags, CPoint point)
         int lastSlash = clipName.ReverseFind('\\');
         if (lastSlash != -1) clipName = clipName.Mid(lastSlash + 1);
 
-        CString menuText;
-        menuText.Format(_T("Remove \"%s\" from Timeline"), clipName);
-        contextMenu.AppendMenu(MF_STRING, ID_TIMELINE_REMOVE_CLIP, menuText);
+        CString splitText;
+        if (m_showSelectionBar && m_hoverClipIndex == hitClipIndex)
+        {
+            splitText.Format(_T("Split \"%s\" at %.2fs"), clipName, m_hoverTimePosition);
+        }
+        else
+        {
+            splitText.Format(_T("Split \"%s\""), clipName);
+        }
+        contextMenu.AppendMenu(MF_STRING, ID_TIMELINE_SPLIT_CLIP, splitText);
+        contextMenu.AppendMenu(MF_SEPARATOR);
 
-        // Show context menu
+        CString removeText;
+        removeText.Format(_T("Remove \"%s\" from Timeline"), clipName);
+        contextMenu.AppendMenu(MF_STRING, ID_TIMELINE_REMOVE_CLIP, removeText);
+
         CPoint screenPoint = point;
         ClientToScreen(&screenPoint);
         contextMenu.TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON,
@@ -240,7 +237,6 @@ void NWPVideoEditorView::OnTimelineRemoveClip()
 {
     if (m_contextMenuClipIndex >= 0 && m_contextMenuClipIndex < (int)m_timelineClips.size())
     {
-        // Store the clip being removed for confirmation
         CString clipName = m_timelineClips[m_contextMenuClipIndex].path;
         int lastSlash = clipName.ReverseFind('\\');
         if (lastSlash != -1) clipName = clipName.Mid(lastSlash + 1);
@@ -250,41 +246,80 @@ void NWPVideoEditorView::OnTimelineRemoveClip()
 
         if (AfxMessageBox(message, MB_YESNO | MB_ICONQUESTION) == IDYES)
         {
-            // Remove the clip from timeline
             m_timelineClips.erase(m_timelineClips.begin() + m_contextMenuClipIndex);
-
-            // Adjust active clip index if necessary
             if (m_activeTimelineClipIndex == m_contextMenuClipIndex)
             {
-                m_activeTimelineClipIndex = -1;  // Deselect if we removed the active clip
+                m_activeTimelineClipIndex = -1;
             }
             else if (m_activeTimelineClipIndex > m_contextMenuClipIndex)
             {
-                m_activeTimelineClipIndex--;  // Adjust index if active clip was after removed clip
+                m_activeTimelineClipIndex--;
             }
-
-            // Reposition remaining clips to fill the gap (optional)
             RepositionClipsAfterRemoval();
-
-            // Update preview after removal
             UpdatePreview();
-
             InvalidateRect(m_rcTimeline, FALSE);
         }
     }
+    m_contextMenuClipIndex = -1;
+}
 
-    m_contextMenuClipIndex = -1;  // Reset context menu clip index
+void NWPVideoEditorView::OnTimelineSplitClip()
+{
+    if (m_contextMenuClipIndex < 0 || m_contextMenuClipIndex >= (int)m_timelineClips.size())
+        return;
+
+    TimelineClip& originalClip = m_timelineClips[m_contextMenuClipIndex];
+
+    double splitTime;
+    if (m_showSelectionBar && m_hoverClipIndex == m_contextMenuClipIndex)
+    {
+        splitTime = m_hoverTimePosition;
+    }
+    else
+    {
+        splitTime = originalClip.clipStartSec + (originalClip.clipLengthSec / 2.0);
+    }
+
+    if (splitTime <= originalClip.clipStartSec ||
+        splitTime >= (originalClip.clipStartSec + originalClip.clipLengthSec))
+    {
+        AfxMessageBox(_T("Invalid split position."));
+        return;
+    }
+
+    TimelineClip secondClip = originalClip;
+    secondClip.startTimeOnTimeline = originalClip.startTimeOnTimeline + (splitTime - originalClip.clipStartSec);
+    secondClip.clipStartSec = splitTime;
+    secondClip.clipLengthSec = (originalClip.clipStartSec + originalClip.clipLengthSec) - splitTime;
+
+    originalClip.clipLengthSec = splitTime - originalClip.clipStartSec;
+
+    m_timelineClips.insert(m_timelineClips.begin() + m_contextMenuClipIndex + 1, secondClip);
+
+    double adjustmentTime = secondClip.clipLengthSec;
+    for (int i = m_contextMenuClipIndex + 2; i < (int)m_timelineClips.size(); i++)
+    {
+        m_timelineClips[i].startTimeOnTimeline += adjustmentTime;
+    }
+
+    m_activeTimelineClipIndex = m_contextMenuClipIndex;
+
+    m_showSelectionBar = false;
+    m_hoverClipIndex = -1;
+    m_hoverTimePosition = -1.0;
+
+    UpdatePreview();
+    InvalidateRect(m_rcTimeline, FALSE);
+
+    m_contextMenuClipIndex = -1;
 }
 
 void NWPVideoEditorView::RepositionClipsAfterRemoval()
 {
-    // Sort clips by timeline position
     std::sort(m_timelineClips.begin(), m_timelineClips.end(),
         [](const TimelineClip& a, const TimelineClip& b) {
             return a.startTimeOnTimeline < b.startTimeOnTimeline;
         });
-
-    // Reposition clips to remove gaps
     double currentPos = 0.0;
     for (auto& clip : m_timelineClips)
     {
@@ -297,7 +332,6 @@ void NWPVideoEditorView::SetActiveClipFromSelection()
 {
     int sel = m_list.GetNextItem(-1, LVNI_SELECTED);
     if (sel < 0 || sel >= (int)m_importedClips.size()) return;
-
     UpdatePreview();
     InvalidateRect(m_rcTimeline, FALSE);
 }
@@ -305,60 +339,44 @@ void NWPVideoEditorView::SetActiveClipFromSelection()
 double NWPVideoEditorView::GetVideoDuration(const CString& filePath)
 {
     CStringA pathA(filePath);
-
-    // Use ffprobe to get video duration
     CStringA cmd;
     cmd.Format("ffprobe -v error -select_streams v:0 -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"%s\"",
         pathA.GetString());
-
     std::string wrapper = std::string("cmd /C ") + cmd.GetString();
     std::vector<char> mutableCmd(wrapper.begin(), wrapper.end());
     mutableCmd.push_back('\0');
-
     HANDLE hReadPipe, hWritePipe;
     SECURITY_ATTRIBUTES sa = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
-
     if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
-        return 30.0; // Default fallback
-
+        return 30.0;
     STARTUPINFOA si{};
     si.cb = sizeof(si);
     si.dwFlags = STARTF_USESTDHANDLES;
     si.hStdOutput = hWritePipe;
     si.hStdError = hWritePipe;
-
     PROCESS_INFORMATION pi{};
-
     BOOL success = CreateProcessA(nullptr, mutableCmd.data(), nullptr, nullptr, TRUE,
         CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-
     if (!success)
     {
         CloseHandle(hReadPipe);
         CloseHandle(hWritePipe);
-        return 30.0; // Default fallback
+        return 30.0;
     }
-
     CloseHandle(hWritePipe);
-
-    // Read the output
     char buffer[1024];
     DWORD bytesRead;
     std::string output;
-
     while (ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, nullptr) && bytesRead > 0)
     {
         buffer[bytesRead] = '\0';
         output += buffer;
     }
-
-    WaitForSingleObject(pi.hProcess, 5000); // 5 second timeout
+    WaitForSingleObject(pi.hProcess, 5000);
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
     CloseHandle(hReadPipe);
-
-    // Parse the duration
-    double duration = 30.0; // Default
+    double duration = 30.0;
     try
     {
         if (!output.empty())
@@ -371,14 +389,12 @@ double NWPVideoEditorView::GetVideoDuration(const CString& filePath)
     {
         duration = 30.0;
     }
-
     return duration;
 }
 
 void NWPVideoEditorView::AddClipToTimeline(const CString& clipPath)
 {
-    // Find the clip's original duration
-    double originalDuration = 30.0; // default
+    double originalDuration = 30.0;
     int imageIndex = -1;
     for (const auto& clip : m_importedClips) {
         if (clip.path == clipPath) {
@@ -387,8 +403,6 @@ void NWPVideoEditorView::AddClipToTimeline(const CString& clipPath)
             break;
         }
     }
-
-    // Calculate position for new clip (at the end of existing clips)
     double newStartTime = 0.0;
     for (const auto& timelineClip : m_timelineClips) {
         double clipEnd = timelineClip.startTimeOnTimeline + timelineClip.clipLengthSec;
@@ -396,8 +410,6 @@ void NWPVideoEditorView::AddClipToTimeline(const CString& clipPath)
             newStartTime = clipEnd;
         }
     }
-
-    // Create new timeline clip
     TimelineClip newClip;
     newClip.path = clipPath;
     newClip.startTimeOnTimeline = newStartTime;
@@ -405,17 +417,11 @@ void NWPVideoEditorView::AddClipToTimeline(const CString& clipPath)
     newClip.clipLengthSec = min(10.0, originalDuration);
     newClip.originalDuration = originalDuration;
     newClip.iImage = imageIndex;
-
     m_timelineClips.push_back(newClip);
     m_activeTimelineClipIndex = (int)m_timelineClips.size() - 1;
-
-    // UPDATE PREVIEW to show the newly added clip
     UpdatePreview();
-
-    // Reset dragging states
     m_dragState = DRAG_NONE;
     m_bDragging = FALSE;
-
     InvalidateRect(m_rcTimeline, FALSE);
 }
 
@@ -465,19 +471,14 @@ BOOL NWPVideoEditorView::IsOverTimeline(CPoint screenPt)
 int NWPVideoEditorView::HitTestTimelineClip(CPoint pt) const
 {
     if (m_timelineClips.empty()) return -1;
-
     const CRect& r = m_rcTimeline;
-    int left = r.left + 12;
-    int right = r.right - 12;
     int top = r.top + 48;
     int bottom = r.bottom - 36;
-
     for (int i = 0; i < (int)m_timelineClips.size(); i++)
     {
         const TimelineClip& clip = m_timelineClips[i];
         int clipStartX = SecondsToTimelineX(clip.startTimeOnTimeline);
         int clipEndX = SecondsToTimelineX(clip.startTimeOnTimeline + clip.clipLengthSec);
-
         CRect clipRect(clipStartX, top, clipEndX, bottom);
         if (clipRect.PtInRect(pt))
         {
@@ -491,26 +492,18 @@ int NWPVideoEditorView::HitTestTimelineHandle(CPoint pt) const
 {
     if (m_activeTimelineClipIndex < 0 || m_activeTimelineClipIndex >= (int)m_timelineClips.size())
         return 0;
-
     const TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
     const CRect& r = m_rcTimeline;
     int top = r.top + 48;
     int bottom = r.bottom - 36;
-
     int clipStartX = SecondsToTimelineX(activeClip.startTimeOnTimeline);
     int clipEndX = SecondsToTimelineX(activeClip.startTimeOnTimeline + activeClip.clipLengthSec);
-
     CRect clipR(clipStartX, top, clipEndX, bottom);
-
-    // Left resize handle
     CRect leftHandleR(clipR.left, clipR.top, clipR.left + 8, clipR.bottom);
-    if (leftHandleR.PtInRect(pt)) return 3;    // Left handle
-
-    // Right resize handle  
+    if (leftHandleR.PtInRect(pt)) return 3;
     CRect rightHandleR(clipR.right - 8, clipR.top, clipR.right, clipR.bottom);
-    if (rightHandleR.PtInRect(pt)) return 2;   // Right handle
-
-    if (clipR.PtInRect(pt)) return 1;          // Inside clip
+    if (rightHandleR.PtInRect(pt)) return 2;
+    if (clipR.PtInRect(pt)) return 1;
     return 0;
 }
 
@@ -520,9 +513,7 @@ double NWPVideoEditorView::TimelineXToSeconds(int x) const
     int left = r.left + 12;
     int right = r.right - 12;
     int timelineWidth = right - left;
-
     if (timelineWidth <= 0) return 0.0;
-
     double ratio = (double)(x - left) / timelineWidth;
     return ratio * m_timelineDurationSec + m_timelineScrollOffset;
 }
@@ -533,9 +524,7 @@ int NWPVideoEditorView::SecondsToTimelineX(double seconds) const
     int left = r.left + 12;
     int right = r.right - 12;
     int timelineWidth = right - left;
-
     if (m_timelineDurationSec <= 0) return left;
-
     double ratio = (seconds - m_timelineScrollOffset) / m_timelineDurationSec;
     return left + (int)(ratio * timelineWidth);
 }
@@ -544,21 +533,14 @@ void NWPVideoEditorView::OnLButtonDown(UINT nFlags, CPoint pt)
 {
     if (!m_rcTimeline.PtInRect(pt))
         return;
-
     m_dragState = DRAG_NONE;
-
-    // First check if we clicked on a clip
     int hitClipIndex = HitTestTimelineClip(pt);
     if (hitClipIndex >= 0)
     {
         m_activeTimelineClipIndex = hitClipIndex;
-
-        // UPDATE PREVIEW IMMEDIATELY when selecting timeline clip
         UpdatePreview();
-
-        // Now check for handle hits on the active clip
         int hit = HitTestTimelineHandle(pt);
-        if (hit == 3) // Left handle
+        if (hit == 3)
         {
             m_dragState = DRAG_LEFT_HANDLE;
             m_dragStart = pt;
@@ -568,7 +550,7 @@ void NWPVideoEditorView::OnLButtonDown(UINT nFlags, CPoint pt)
             m_dragStartTimelinePos = clip.startTimeOnTimeline;
             SetCapture();
         }
-        else if (hit == 2) // Right handle
+        else if (hit == 2)
         {
             m_dragState = DRAG_RIGHT_HANDLE;
             m_dragStart = pt;
@@ -577,7 +559,7 @@ void NWPVideoEditorView::OnLButtonDown(UINT nFlags, CPoint pt)
             m_dragStartClipLength = clip.clipLengthSec;
             SetCapture();
         }
-        else if (hit == 1) // Inside clip - prepare for moving
+        else if (hit == 1)
         {
             m_dragState = DRAG_CLIP_MOVE;
             m_dragStart = pt;
@@ -585,21 +567,18 @@ void NWPVideoEditorView::OnLButtonDown(UINT nFlags, CPoint pt)
             m_dragStartTimelinePos = clip.startTimeOnTimeline;
             SetCapture();
         }
-
         InvalidateRect(m_rcTimeline, FALSE);
     }
     else
     {
-        // Clicked on empty timeline area
         m_activeTimelineClipIndex = -1;
-        UpdatePreview(); // UPDATE PREVIEW when deselecting
+        UpdatePreview();
         InvalidateRect(m_rcTimeline, FALSE);
     }
 }
 
 void NWPVideoEditorView::OnMouseMove(UINT nFlags, CPoint point)
 {
-    // Handle clip drag-and-drop from list
     if (m_bDragging && m_pDragImage)
     {
         CPoint ptScreen(point);
@@ -612,7 +591,6 @@ void NWPVideoEditorView::OnMouseMove(UINT nFlags, CPoint point)
         return;
     }
 
-    // Handle timeline handle/clip dragging
     if (m_dragState != DRAG_NONE && GetCapture() == this &&
         m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
     {
@@ -620,41 +598,26 @@ void NWPVideoEditorView::OnMouseMove(UINT nFlags, CPoint point)
 
         if (m_dragState == DRAG_LEFT_HANDLE)
         {
-            // Calculate new timeline position
             double newTimelinePos = m_dragStartTimelinePos + TimelineXToSeconds(point.x) - TimelineXToSeconds(m_dragStart.x);
-
-            // FIXED: If dragging beyond left border, stop adjusting clip properties
             if (newTimelinePos < 0.0)
             {
-                // Clamp timeline position to 0 and stop further adjustments
                 newTimelinePos = 0.0;
-
-                // Keep the clip properties unchanged when clamped at left border
                 activeClip.startTimeOnTimeline = newTimelinePos;
-                // Don't change clipStartSec or clipLengthSec when at border
             }
             else
             {
-                // Normal dragging logic when not at border
                 double deltaSeconds = TimelineXToSeconds(point.x) - TimelineXToSeconds(m_dragStart.x);
                 double newClipStart = max(0.0, min(activeClip.originalDuration - 1.0,
                     m_dragStartClipStart - deltaSeconds));
-
-                // Calculate new length to maintain the right edge position
                 double rightEdgeTime = m_dragStartTimelinePos + m_dragStartClipLength;
                 double newLength = max(1.0, rightEdgeTime - newTimelinePos);
-
-                // PREVENT STRETCHING BEYOND ORIGINAL CLIP LENGTH
                 if (newClipStart + newLength > activeClip.originalDuration) {
                     newLength = activeClip.originalDuration - newClipStart;
                 }
-
-                // Ensure minimum length
                 if (newLength < 1.0) {
                     newLength = 1.0;
                     newClipStart = max(0.0, activeClip.originalDuration - newLength);
                 }
-
                 activeClip.startTimeOnTimeline = newTimelinePos;
                 activeClip.clipStartSec = newClipStart;
                 activeClip.clipLengthSec = newLength;
@@ -665,8 +628,6 @@ void NWPVideoEditorView::OnMouseMove(UINT nFlags, CPoint point)
             double currentTime = TimelineXToSeconds(point.x);
             double deltaTime = currentTime - TimelineXToSeconds(m_dragStart.x);
             double newLength = m_dragStartClipLength + deltaTime;
-
-            // PREVENT STRETCHING BEYOND ORIGINAL CLIP LENGTH
             double maxLength = activeClip.originalDuration - activeClip.clipStartSec;
             activeClip.clipLengthSec = max(1.0, min(maxLength, newLength));
         }
@@ -675,8 +636,6 @@ void NWPVideoEditorView::OnMouseMove(UINT nFlags, CPoint point)
             double currentTime = TimelineXToSeconds(point.x);
             double deltaTime = currentTime - TimelineXToSeconds(m_dragStart.x);
             double newPos = max(0.0, m_dragStartTimelinePos + deltaTime);
-
-            // Simple collision detection - prevent overlap
             bool canMove = true;
             for (int i = 0; i < (int)m_timelineClips.size(); i++)
             {
@@ -685,52 +644,81 @@ void NWPVideoEditorView::OnMouseMove(UINT nFlags, CPoint point)
                 double otherStart = otherClip.startTimeOnTimeline;
                 double otherEnd = otherClip.startTimeOnTimeline + otherClip.clipLengthSec;
                 double thisEnd = newPos + activeClip.clipLengthSec;
-
                 if (!(thisEnd <= otherStart || newPos >= otherEnd))
                 {
                     canMove = false;
                     break;
                 }
             }
-
             if (canMove)
             {
                 activeClip.startTimeOnTimeline = newPos;
             }
         }
-
         InvalidateRect(m_rcTimeline, FALSE);
         return;
     }
 
-    // Cursor feedback when not dragging
     if (m_rcTimeline.PtInRect(point) && m_dragState == DRAG_NONE)
     {
         int hitClipIndex = HitTestTimelineClip(point);
         if (hitClipIndex >= 0)
         {
-            int oldActive = m_activeTimelineClipIndex;
-            m_activeTimelineClipIndex = hitClipIndex;
-            int hit = HitTestTimelineHandle(point);
-            m_activeTimelineClipIndex = oldActive; // Don't change selection just for cursor
+            m_hoverClipIndex = hitClipIndex;
+            const TimelineClip& clip = m_timelineClips[hitClipIndex];
 
-            if (hit == 2 || hit == 3)
-                SetCursor(LoadCursor(NULL, IDC_SIZEWE));
-            else if (hit == 1)
-                SetCursor(LoadCursor(NULL, IDC_SIZEALL));
+            int clipStartX = SecondsToTimelineX(clip.startTimeOnTimeline);
+            int clipEndX = SecondsToTimelineX(clip.startTimeOnTimeline + clip.clipLengthSec);
+
+            double clipRatio = (double)(point.x - clipStartX) / (clipEndX - clipStartX);
+            clipRatio = max(0.0, min(1.0, clipRatio));
+
+            m_hoverTimePosition = clip.clipStartSec + (clipRatio * clip.clipLengthSec);
+            m_showSelectionBar = true;
+
+            if (hitClipIndex == m_activeTimelineClipIndex)
+            {
+                int hit = HitTestTimelineHandle(point);
+                if (hit == 2 || hit == 3)
+                    SetCursor(LoadCursor(NULL, IDC_SIZEWE));
+                else if (hit == 1)
+                    SetCursor(LoadCursor(NULL, IDC_SIZEALL));
+                else
+                    SetCursor(LoadCursor(NULL, IDC_IBEAM));
+            }
             else
-                SetCursor(LoadCursor(NULL, IDC_ARROW));
+            {
+                SetCursor(LoadCursor(NULL, IDC_IBEAM));
+            }
+
+            InvalidateRect(m_rcTimeline, FALSE);
         }
         else
         {
+            if (m_showSelectionBar)
+            {
+                m_showSelectionBar = false;
+                m_hoverClipIndex = -1;
+                m_hoverTimePosition = -1.0;
+                InvalidateRect(m_rcTimeline, FALSE);
+            }
             SetCursor(LoadCursor(NULL, IDC_ARROW));
+        }
+    }
+    else
+    {
+        if (m_showSelectionBar)
+        {
+            m_showSelectionBar = false;
+            m_hoverClipIndex = -1;
+            m_hoverTimePosition = -1.0;
+            InvalidateRect(m_rcTimeline, FALSE);
         }
     }
 }
 
 void NWPVideoEditorView::OnLButtonUp(UINT nFlags, CPoint point)
 {
-    // Handle drag-drop completion from list
     if (m_bDragging)
     {
         if (GetCapture() == this) ReleaseCapture();
@@ -742,7 +730,6 @@ void NWPVideoEditorView::OnLButtonUp(UINT nFlags, CPoint point)
             delete m_pDragImage;
             m_pDragImage = nullptr;
         }
-
         CPoint ptScreen(point);
         ClientToScreen(&ptScreen);
         if (IsOverTimeline(ptScreen) && m_nDragIndex >= 0 && m_nDragIndex < (int)m_importedClips.size())
@@ -752,8 +739,6 @@ void NWPVideoEditorView::OnLButtonUp(UINT nFlags, CPoint point)
         m_nDragIndex = -1;
         return;
     }
-
-    // Handle timeline dragging completion
     if (m_dragState != DRAG_NONE)
     {
         if (GetCapture() == this) ReleaseCapture();
@@ -771,53 +756,38 @@ void NWPVideoEditorView::OnDraw(CDC* pDC)
 void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC)
 {
     if (m_rcPreview.IsRectEmpty()) return;
-
-    // Draw preview border
     pDC->FillSolidRect(m_rcPreview, RGB(20, 20, 20));
     pDC->Draw3dRect(m_rcPreview, RGB(80, 80, 80), RGB(40, 40, 40));
-
     CRect innerRect = m_rcPreview;
     innerRect.DeflateRect(2, 2);
-
     if (m_hPreviewBitmap)
     {
-        // Draw the actual video frame
         CDC memDC;
         memDC.CreateCompatibleDC(pDC);
         HBITMAP oldBitmap = (HBITMAP)memDC.SelectObject(m_hPreviewBitmap);
-
         BITMAP bmp;
         GetObject(m_hPreviewBitmap, sizeof(BITMAP), &bmp);
-
-        // Scale to fit the preview window
         pDC->StretchBlt(innerRect.left, innerRect.top, innerRect.Width(), innerRect.Height(),
             &memDC, 0, 0, bmp.bmWidth, bmp.bmHeight, SRCCOPY);
-
         memDC.SelectObject(oldBitmap);
     }
     else
     {
-        // Loading indicator
         pDC->FillSolidRect(innerRect, RGB(40, 40, 40));
         pDC->SetTextColor(RGB(150, 150, 150));
         pDC->SetBkMode(TRANSPARENT);
         pDC->DrawText(_T("Loading frame..."), innerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
-
-    // Draw preview info at the bottom
     CRect infoRect = m_rcPreview;
     infoRect.top = infoRect.bottom + 5;
     infoRect.bottom = infoRect.top + 20;
-
     if (!m_currentPreviewPath.IsEmpty())
     {
         CString filename = m_currentPreviewPath;
         int lastSlash = filename.ReverseFind('\\');
         if (lastSlash != -1) filename = filename.Mid(lastSlash + 1);
-
         CString info;
         info.Format(_T("%s @ %.2fs"), filename, m_previewTimePosition);
-
         pDC->SetTextColor(RGB(200, 200, 200));
         pDC->SetBkMode(TRANSPARENT);
         pDC->DrawText(info, infoRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
@@ -826,14 +796,12 @@ void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC)
 
 void NWPVideoEditorView::UpdatePreview()
 {
-    // PRIORITY: Show active timeline clip first
     if (m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
     {
         const TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
         m_previewTimePosition = activeClip.clipStartSec;
         LoadPreviewFrame(activeClip.path, m_previewTimePosition);
     }
-    // FALLBACK: Show selected imported clip only if no timeline clip is active
     else
     {
         int sel = m_list.GetNextItem(-1, LVNI_SELECTED);
@@ -852,72 +820,51 @@ void NWPVideoEditorView::UpdatePreview()
 void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePosition)
 {
     m_currentPreviewPath = filePath;
-
-    // Clean up old bitmap
     if (m_hPreviewBitmap)
     {
         DeleteObject(m_hPreviewBitmap);
         m_hPreviewBitmap = nullptr;
     }
-
-    // Generate unique temp file path for BMP
     TCHAR tempPath[MAX_PATH];
     GetTempPath(MAX_PATH, tempPath);
     CString tempImagePath;
     tempImagePath.Format(_T("%stemp_frame_%d.bmp"), tempPath, GetTickCount());
-
-    // Use FFmpeg to extract frame as BMP (works better on CI/CD)
     CStringA pathA(filePath);
     CStringA tempImagePathA(tempImagePath);
     CStringA cmd;
-
-    // Simple FFmpeg command - avoid seeking too early to prevent black frames
     double seekTime = max(1.0, timePosition);
     cmd.Format("ffmpeg -y -ss %.3f -i \"%s\" -vframes 1 -s 480x360 \"%s\"",
         seekTime, pathA.GetString(), tempImagePathA.GetString());
-
     std::string wrapper = std::string("cmd /C ") + cmd.GetString() + " >nul 2>&1";
     std::vector<char> mutableCmd(wrapper.begin(), wrapper.end());
     mutableCmd.push_back('\0');
-
     STARTUPINFOA si{};
     si.cb = sizeof(si);
     si.dwFlags = STARTF_USESHOWWINDOW;
     si.wShowWindow = SW_HIDE;
     PROCESS_INFORMATION pi{};
-
     BOOL success = CreateProcessA(nullptr, mutableCmd.data(), nullptr, nullptr, FALSE,
         CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-
     if (success)
     {
-        // Wait for FFmpeg to complete
-        WaitForSingleObject(pi.hProcess, 10000); // 10 second timeout
+        WaitForSingleObject(pi.hProcess, 10000);
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
-
-        // Try to load the BMP file using only Windows API
         if (GetFileAttributes(tempImagePath) != INVALID_FILE_ATTRIBUTES)
         {
             LoadBitmapFromFile(tempImagePath);
         }
-
-        // Always clean up temp file
         DeleteFile(tempImagePath);
     }
-
-    // If we don't have a bitmap, create a test pattern
     if (!m_hPreviewBitmap)
     {
         CreateTestFrame(filePath, timePosition);
     }
-
     InvalidateRect(m_rcPreview, FALSE);
 }
 
 void NWPVideoEditorView::LoadBitmapFromFile(const CString& imagePath)
 {
-    // Use only Windows API to load BMP files
     m_hPreviewBitmap = (HBITMAP)LoadImage(NULL, imagePath, IMAGE_BITMAP,
         0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
 }
@@ -927,18 +874,11 @@ void NWPVideoEditorView::CreateTestFrame(const CString& filePath, double timePos
     CClientDC dc(this);
     CDC memDC;
     memDC.CreateCompatibleDC(&dc);
-
     m_hPreviewBitmap = CreateCompatibleBitmap(dc, 480, 360);
     HBITMAP oldBitmap = (HBITMAP)memDC.SelectObject(m_hPreviewBitmap);
-
-    // Create a colorful test pattern instead of black
     memDC.FillSolidRect(0, 0, 480, 360, RGB(40, 40, 60));
-
-    // Draw a test pattern
     CPen redPen(PS_SOLID, 2, RGB(255, 100, 100));
     CPen* oldPen = memDC.SelectObject(&redPen);
-
-    // Draw some lines to show it's working
     for (int i = 0; i < 480; i += 40) {
         memDC.MoveTo(i, 0);
         memDC.LineTo(i, 360);
@@ -947,30 +887,22 @@ void NWPVideoEditorView::CreateTestFrame(const CString& filePath, double timePos
         memDC.MoveTo(0, j);
         memDC.LineTo(480, j);
     }
-
     memDC.SelectObject(oldPen);
-
-    // Draw text info
     memDC.SetTextColor(RGB(255, 255, 255));
     memDC.SetBkMode(TRANSPARENT);
-
     CString filename = filePath;
     int lastSlash = filename.ReverseFind('\\');
     if (lastSlash != -1) filename = filename.Mid(lastSlash + 1);
-
     CRect titleRect(20, 150, 460, 190);
     memDC.DrawText(filename, titleRect, DT_CENTER | DT_VCENTER | DT_WORDBREAK);
-
     CString timeText;
     timeText.Format(_T("Time: %.2fs"), timePosition);
     CRect timeRect(20, 200, 460, 230);
     memDC.DrawText(timeText, timeRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
     CString statusText = _T("FFmpeg frame extraction failed");
     CRect statusRect(20, 250, 460, 280);
     memDC.SetTextColor(RGB(255, 200, 100));
     memDC.DrawText(statusText, statusRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
     memDC.SelectObject(oldBitmap);
 }
 
@@ -979,13 +911,9 @@ void NWPVideoEditorView::CreateBlackFrame()
     CClientDC dc(this);
     CDC memDC;
     memDC.CreateCompatibleDC(&dc);
-
     m_hPreviewBitmap = CreateCompatibleBitmap(dc, 480, 360);
     HBITMAP oldBitmap = (HBITMAP)memDC.SelectObject(m_hPreviewBitmap);
-
-    // Just create a black frame
     memDC.FillSolidRect(0, 0, 480, 360, RGB(0, 0, 0));
-
     memDC.SelectObject(oldBitmap);
 }
 
@@ -996,7 +924,6 @@ void NWPVideoEditorView::ClearPreview()
         DeleteObject(m_hPreviewBitmap);
         m_hPreviewBitmap = nullptr;
     }
-
     m_currentPreviewPath.Empty();
     m_previewTimePosition = 0.0;
     InvalidateRect(m_rcPreview, FALSE);
@@ -1007,7 +934,6 @@ void NWPVideoEditorView::DrawTimeline(CDC* pDC)
     CRect r = m_rcTimeline;
     pDC->FillSolidRect(r, RGB(28, 28, 28));
     pDC->DrawEdge(r, EDGE_SUNKEN, BF_RECT);
-
     pDC->SetTextColor(RGB(230, 230, 230));
     pDC->TextOut(r.left + 10, r.top + 10, _T("Timeline"));
 
@@ -1016,48 +942,52 @@ void NWPVideoEditorView::DrawTimeline(CDC* pDC)
         return;
     }
 
-    int left = r.left + 12;
-    int right = r.right - 12;
     int top = r.top + 48;
     int bottom = r.bottom - 36;
 
-    // Draw all timeline clips
     for (int i = 0; i < (int)m_timelineClips.size(); i++)
     {
         const TimelineClip& clip = m_timelineClips[i];
-
         int clipStartX = SecondsToTimelineX(clip.startTimeOnTimeline);
         int clipEndX = SecondsToTimelineX(clip.startTimeOnTimeline + clip.clipLengthSec);
-
         CRect clipR(clipStartX, top, clipEndX, bottom);
 
-        // Different colors for active vs inactive clips
         COLORREF clipColor = (i == m_activeTimelineClipIndex) ? RGB(70, 120, 220) : RGB(90, 90, 120);
         COLORREF borderColor = (i == m_activeTimelineClipIndex) ? RGB(30, 60, 140) : RGB(60, 60, 80);
 
         pDC->FillSolidRect(clipR, clipColor);
         pDC->FrameRect(clipR, &CBrush(borderColor));
 
-        // Draw handles only for active clip
+        if (m_showSelectionBar && m_hoverClipIndex == i)
+        {
+            double clipRatio = (m_hoverTimePosition - clip.clipStartSec) / clip.clipLengthSec;
+            clipRatio = max(0.0, min(1.0, clipRatio));
+            int selectionX = clipStartX + (int)(clipRatio * (clipEndX - clipStartX));
+
+            CPen selectionPen(PS_SOLID, 2, RGB(255, 255, 0));
+            CPen* oldPen = pDC->SelectObject(&selectionPen);
+            pDC->MoveTo(selectionX, clipR.top);
+            pDC->LineTo(selectionX, clipR.bottom);
+            pDC->SelectObject(oldPen);
+
+            CString timeText;
+            timeText.Format(_T("%.2fs"), m_hoverTimePosition);
+            CRect timeRect(selectionX - 30, clipR.top - 20, selectionX + 30, clipR.top - 2);
+            pDC->SetBkColor(RGB(255, 255, 0));
+            pDC->SetTextColor(RGB(0, 0, 0));
+            pDC->DrawText(timeText, timeRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
+
         if (i == m_activeTimelineClipIndex)
         {
-            // Left handle
             CRect leftHandleR(clipR.left, clipR.top, clipR.left + 8, clipR.bottom);
             pDC->FillSolidRect(leftHandleR, RGB(255, 160, 160));
-
-            // Right handle
             CRect rightHandleR(clipR.right - 8, clipR.top, clipR.right, clipR.bottom);
             pDC->FillSolidRect(rightHandleR, RGB(160, 200, 255));
         }
 
-        // Clip text
         CString clipText;
-        CString filename = clip.path;
-        int lastSlash = filename.ReverseFind('\\');
-        if (lastSlash != -1) filename = filename.Mid(lastSlash + 1);
-
         clipText.Format(_T("%.1fs"), clip.clipLengthSec);
-
         CRect textR = clipR;
         textR.DeflateRect(12, 2);
         pDC->SetBkMode(TRANSPARENT);
@@ -1065,7 +995,6 @@ void NWPVideoEditorView::DrawTimeline(CDC* pDC)
         pDC->DrawText(clipText, textR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 
-    // Draw overlays
     for (const auto& ov : m_overlays) {
         int x1 = SecondsToTimelineX(ov.startSec);
         int x2 = SecondsToTimelineX(ov.startSec + ov.durSec);
@@ -1078,7 +1007,6 @@ void NWPVideoEditorView::DrawTimeline(CDC* pDC)
         }
     }
 
-    // Draw timeline info for active clip
     if (m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
     {
         const TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
@@ -1096,39 +1024,37 @@ void NWPVideoEditorView::OnFileExport()
         AfxMessageBox(L"Add clips to the timeline first.");
         return;
     }
-
     CFileDialog sfd(FALSE, L"mp4", L"output.mp4", OFN_OVERWRITEPROMPT,
-        L"MP4 video|*.mp4||");
+        L"MP4 video|*.mp4|All Files|*.*||");
+    sfd.m_ofn.lpstrDefExt = L"mp4";
     if (sfd.DoModal() != IDOK) return;
-
     CString out = sfd.GetPathName();
-
-    // For now, export the first clip (you can extend this to handle multiple clips)
+    if (out.ReverseFind(L'.') < 0)
+        out += L".mp4";
     const TimelineClip& firstClip = m_timelineClips[0];
-
     CStringA inA(firstClip.path);
     CStringA outA(out);
     CStringA ff;
     ff.Format("ffmpeg -y -ss %.2f -i \"%s\" -t %.2f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
         firstClip.clipStartSec, inA.GetString(), firstClip.clipLengthSec, outA.GetString());
-
     std::string wrapper = std::string("cmd /C ") + ff.GetString();
     std::vector<char> mutableCmd(wrapper.begin(), wrapper.end());
     mutableCmd.push_back('\0');
-
     STARTUPINFOA si{}; si.cb = sizeof(si);
     PROCESS_INFORMATION pi{};
     BOOL ok = CreateProcessA(nullptr, mutableCmd.data(), nullptr, nullptr, FALSE,
         CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-
     if (!ok) { AfxMessageBox(L"Failed to start ffmpeg. Ensure it's in PATH."); return; }
-
     WaitForSingleObject(pi.hProcess, INFINITE);
     DWORD exitCode = 0; GetExitCodeProcess(pi.hProcess, &exitCode);
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
-
     if (exitCode == 0) AfxMessageBox(L"Export finished.");
     else AfxMessageBox(L"Export failed.");
+}
+
+void NWPVideoEditorView::OnFileSave()
+{
+    OnFileExport();
 }
 
 void NWPVideoEditorView::OnEditAddText()
@@ -1162,12 +1088,10 @@ void NWPVideoEditorView::AssertValid() const
 {
     CView::AssertValid();
 }
-
 void NWPVideoEditorView::Dump(CDumpContext& dc) const
 {
     CView::Dump(dc);
 }
-
 CNWPVideoEditorDoc* NWPVideoEditorView::GetDocument() const
 {
     ASSERT(m_pDocument->IsKindOf(RUNTIME_CLASS(CNWPVideoEditorDoc)));
