@@ -132,6 +132,7 @@ private:
     void StopPlayback();
     void UpdatePlaybackFrame();
     double GetCurrentClipDuration();
+    void ExecuteFFmpegCommand(const char* command);
 };
 
 #ifndef _DEBUG
