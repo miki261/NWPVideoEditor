@@ -1145,33 +1145,111 @@ void NWPVideoEditorView::OnFileExport()
         AfxMessageBox(L"Add clips to the timeline first.");
         return;
     }
+
     CFileDialog sfd(FALSE, L"mp4", L"output.mp4", OFN_OVERWRITEPROMPT,
         L"MP4 video|*.mp4|All Files|*.*||");
     sfd.m_ofn.lpstrDefExt = L"mp4";
     if (sfd.DoModal() != IDOK) return;
+
     CString out = sfd.GetPathName();
     if (out.ReverseFind(L'.') < 0)
         out += L".mp4";
-    const TimelineClip& firstClip = m_timelineClips[0];
-    CStringA inA(firstClip.path);
-    CStringA outA(out);
-    CStringA ff;
-    ff.Format("ffmpeg -y -ss %.2f -i \"%s\" -t %.2f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
-        firstClip.clipStartSec, inA.GetString(), firstClip.clipLengthSec, outA.GetString());
-    std::string wrapper = std::string("cmd /C ") + ff.GetString();
+
+    // Sort clips by timeline position to ensure correct order
+    std::vector<TimelineClip> sortedClips = m_timelineClips;
+    std::sort(sortedClips.begin(), sortedClips.end(),
+        [](const TimelineClip& a, const TimelineClip& b) {
+            return a.startTimeOnTimeline < b.startTimeOnTimeline;
+        });
+
+    if (sortedClips.size() == 1)
+    {
+        // Single clip - simple export
+        const TimelineClip& clip = sortedClips[0];
+        CStringA inA(clip.path);
+        CStringA outA(out);
+        CStringA ff;
+        ff.Format("ffmpeg -y -ss %.3f -i \"%s\" -t %.3f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
+            clip.clipStartSec, inA.GetString(), clip.clipLengthSec, outA.GetString());
+
+        ExecuteFFmpegCommand(ff.GetString());
+    }
+    else
+    {
+        // Multiple clips - use concat filter
+        CStringA outA(out);
+        CStringA ff;
+
+        // Build input files part
+        ff = "ffmpeg -y";
+        for (const auto& clip : sortedClips)
+        {
+            CStringA pathA(clip.path);
+            CStringA input;
+            input.Format(" -ss %.3f -t %.3f -i \"%s\"",
+                clip.clipStartSec, clip.clipLengthSec, pathA.GetString());
+            ff += input;
+        }
+
+        // Build filter_complex part
+        CStringA filterComplex = " -filter_complex \"";
+        for (int i = 0; i < (int)sortedClips.size(); i++)
+        {
+            CStringA segment;
+            segment.Format("[%d:v:0][%d:a:0]", i, i);
+            filterComplex += segment;
+        }
+
+        CStringA concatFilter;
+        concatFilter.Format("concat=n=%d:v=1:a=1[outv][outa]\"", (int)sortedClips.size());
+        filterComplex += concatFilter;
+
+        // Complete command
+        ff += filterComplex;
+        ff += " -map \"[outv]\" -map \"[outa]\" -c:v libx264 -preset veryfast -crf 20 -c:a aac";
+        CStringA outputPart;
+        outputPart.Format(" \"%s\"", outA.GetString());
+        ff += outputPart;
+
+        ExecuteFFmpegCommand(ff.GetString());
+    }
+}
+
+void NWPVideoEditorView::ExecuteFFmpegCommand(const char* command)
+{
+    std::string wrapper = std::string("cmd /C ") + command;
     std::vector<char> mutableCmd(wrapper.begin(), wrapper.end());
     mutableCmd.push_back('\0');
-    STARTUPINFOA si{}; si.cb = sizeof(si);
+
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+
     PROCESS_INFORMATION pi{};
     BOOL ok = CreateProcessA(nullptr, mutableCmd.data(), nullptr, nullptr, FALSE,
         CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-    if (!ok) { AfxMessageBox(L"Failed to start ffmpeg. Ensure it's in PATH."); return; }
+
+    if (!ok) {
+        AfxMessageBox(L"Failed to start ffmpeg. Ensure it's in PATH.");
+        return;
+    }
+
+    // Show progress dialog
+    AfxMessageBox(L"Exporting... This may take a while. Click OK to continue in background.");
+
     WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD exitCode = 0; GetExitCodeProcess(pi.hProcess, &exitCode);
-    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
-    if (exitCode == 0) AfxMessageBox(L"Export finished.");
-    else AfxMessageBox(L"Export failed.");
+    DWORD exitCode = 0;
+    GetExitCodeProcess(pi.hProcess, &exitCode);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+
+    if (exitCode == 0)
+        AfxMessageBox(L"Export finished successfully.");
+    else
+        AfxMessageBox(L"Export failed. Check that all video files are accessible.");
 }
+
 
 void NWPVideoEditorView::OnFileSave()
 {
