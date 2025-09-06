@@ -33,6 +33,9 @@ BEGIN_MESSAGE_MAP(NWPVideoEditorView, CView)
     ON_WM_RBUTTONDOWN()
     ON_COMMAND(ID_TIMELINE_REMOVE_CLIP, OnTimelineRemoveClip)
     ON_COMMAND(ID_TIMELINE_SPLIT_CLIP, OnTimelineSplitClip)
+    ON_BN_CLICKED(ID_PLAY_PAUSE_BUTTON, OnPlayPause)
+    ON_BN_CLICKED(ID_STOP_BUTTON, OnStop)
+    ON_WM_TIMER()
     ON_COMMAND(ID_FILE_PRINT, &CView::OnFilePrint)
     ON_COMMAND(ID_FILE_PRINT_DIRECT, &CView::OnFilePrint)
     ON_COMMAND(ID_FILE_PRINT_PREVIEW, &CView::OnFilePrintPreview)
@@ -46,6 +49,11 @@ NWPVideoEditorView::NWPVideoEditorView()
 
 NWPVideoEditorView::~NWPVideoEditorView()
 {
+    if (m_playbackTimer)
+    {
+        KillTimer(m_playbackTimer);
+        m_playbackTimer = 0;
+    }
     if (m_pDragImage)
     {
         delete m_pDragImage;
@@ -78,6 +86,14 @@ int NWPVideoEditorView::OnCreate(LPCREATESTRUCT cs)
 
     m_rcPreview = CRect(0, 0, 480, 360);
 
+    if (!m_playPauseButton.Create(_T("Play"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        CRect(0, 0, 60, 25), this, ID_PLAY_PAUSE_BUTTON))
+        return -1;
+
+    if (!m_stopButton.Create(_T("Stop"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        CRect(0, 0, 60, 25), this, ID_STOP_BUTTON))
+        return -1;
+
     return 0;
 }
 
@@ -93,6 +109,9 @@ void NWPVideoEditorView::Layout(int cx, int cy)
     const int previewW = 480;
     const int previewH = 360;
     const int margin = 10;
+    const int buttonH = 25;
+    const int buttonW = 60;
+    const int buttonSpacing = 10;
 
     if (m_list.GetSafeHwnd())
     {
@@ -103,6 +122,13 @@ void NWPVideoEditorView::Layout(int cx, int cy)
     int previewX = cx - previewW - margin;
     int previewY = margin;
     m_rcPreview = CRect(previewX, previewY, previewX + previewW, previewY + previewH);
+
+    if (m_playPauseButton.GetSafeHwnd())
+    {
+        int buttonY = previewY + previewH + 5;
+        m_playPauseButton.MoveWindow(previewX, buttonY, buttonW, buttonH);
+        m_stopButton.MoveWindow(previewX + buttonW + buttonSpacing, buttonY, buttonW, buttonH);
+    }
 
     m_rcTimeline = CRect(margin, cy - timelineH, cx - margin, cy - margin);
     Invalidate(FALSE);
@@ -312,6 +338,98 @@ void NWPVideoEditorView::OnTimelineSplitClip()
     InvalidateRect(m_rcTimeline, FALSE);
 
     m_contextMenuClipIndex = -1;
+}
+
+void NWPVideoEditorView::OnPlayPause()
+{
+    if (m_isPlaying)
+    {
+        StopPlayback();
+    }
+    else
+    {
+        StartPlayback();
+    }
+}
+
+void NWPVideoEditorView::OnStop()
+{
+    StopPlayback();
+    if (m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
+    {
+        const TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
+        m_previewTimePosition = activeClip.clipStartSec;
+        LoadPreviewFrame(activeClip.path, m_previewTimePosition);
+    }
+}
+
+void NWPVideoEditorView::StartPlayback()
+{
+    if (m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
+    {
+        m_isPlaying = true;
+        m_playbackStartTime = m_previewTimePosition;
+        m_playbackStartTick = GetTickCount();
+        m_playbackTimer = SetTimer(1, 100, NULL);
+        m_playPauseButton.SetWindowText(_T("Pause"));
+    }
+}
+
+void NWPVideoEditorView::StopPlayback()
+{
+    if (m_playbackTimer)
+    {
+        KillTimer(m_playbackTimer);
+        m_playbackTimer = 0;
+    }
+    m_isPlaying = false;
+    m_playPauseButton.SetWindowText(_T("Play"));
+}
+
+void NWPVideoEditorView::OnTimer(UINT_PTR nIDEvent)
+{
+    if (nIDEvent == 1 && m_isPlaying)
+    {
+        UpdatePlaybackFrame();
+    }
+    CView::OnTimer(nIDEvent);
+}
+
+void NWPVideoEditorView::UpdatePlaybackFrame()
+{
+    if (m_activeTimelineClipIndex < 0 || m_activeTimelineClipIndex >= (int)m_timelineClips.size())
+    {
+        StopPlayback();
+        return;
+    }
+
+    const TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
+    DWORD currentTick = GetTickCount();
+    double elapsed = (currentTick - m_playbackStartTick) / 1000.0;
+
+    double newTime = m_playbackStartTime + elapsed;
+    double clipEndTime = activeClip.clipStartSec + activeClip.clipLengthSec;
+
+    if (newTime >= clipEndTime)
+    {
+        newTime = clipEndTime - 0.1;
+        StopPlayback();
+    }
+
+    if (newTime != m_previewTimePosition)
+    {
+        m_previewTimePosition = newTime;
+        LoadPreviewFrame(activeClip.path, m_previewTimePosition);
+    }
+}
+
+double NWPVideoEditorView::GetCurrentClipDuration()
+{
+    if (m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
+    {
+        return m_timelineClips[m_activeTimelineClipIndex].clipLengthSec;
+    }
+    return 0.0;
 }
 
 void NWPVideoEditorView::RepositionClipsAfterRemoval()
@@ -779,7 +897,7 @@ void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC)
         pDC->DrawText(_T("Loading frame..."), innerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
     CRect infoRect = m_rcPreview;
-    infoRect.top = infoRect.bottom + 5;
+    infoRect.top = infoRect.bottom + 35;
     infoRect.bottom = infoRect.top + 20;
     if (!m_currentPreviewPath.IsEmpty())
     {
@@ -787,7 +905,8 @@ void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC)
         int lastSlash = filename.ReverseFind('\\');
         if (lastSlash != -1) filename = filename.Mid(lastSlash + 1);
         CString info;
-        info.Format(_T("%s @ %.2fs"), filename, m_previewTimePosition);
+        info.Format(_T("%s @ %.2fs %s"), filename, m_previewTimePosition,
+            m_isPlaying ? _T("(Playing)") : _T(""));
         pDC->SetTextColor(RGB(200, 200, 200));
         pDC->SetBkMode(TRANSPARENT);
         pDC->DrawText(info, infoRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
@@ -796,6 +915,7 @@ void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC)
 
 void NWPVideoEditorView::UpdatePreview()
 {
+    StopPlayback();
     if (m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
     {
         const TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
@@ -919,6 +1039,7 @@ void NWPVideoEditorView::CreateBlackFrame()
 
 void NWPVideoEditorView::ClearPreview()
 {
+    StopPlayback();
     if (m_hPreviewBitmap)
     {
         DeleteObject(m_hPreviewBitmap);
