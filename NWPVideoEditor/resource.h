@@ -90,6 +90,9 @@
 #define ID_EDIT_ADDTEXT					32813
 #define ID_TIMELINE_REMOVE_CLIP			32814
 #define ID_TIMELINE_SPLIT_CLIP			32815
+#define ID_PLAY_PAUSE_BUTTON            32816
+#define ID_STOP_BUTTON                  32817
+
 
 
 #ifndef IDI_CLASS_FOLDER_CLOSED  

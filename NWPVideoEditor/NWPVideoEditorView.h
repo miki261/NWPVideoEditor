@@ -63,6 +63,14 @@ public:
     int m_hoverClipIndex = -1;
     bool m_showSelectionBar = false;
 
+    // Video playback controls
+    CButton m_playPauseButton;
+    CButton m_stopButton;
+    bool m_isPlaying = false;
+    UINT_PTR m_playbackTimer = 0;
+    double m_playbackStartTime = 0.0;
+    DWORD m_playbackStartTick = 0;
+
 public:
     virtual void OnDraw(CDC* pDC);
     virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
@@ -95,6 +103,9 @@ protected:
     afx_msg void OnEditAddText();
     afx_msg void OnTimelineRemoveClip();
     afx_msg void OnTimelineSplitClip();
+    afx_msg void OnPlayPause();
+    afx_msg void OnStop();
+    afx_msg void OnTimer(UINT_PTR nIDEvent);
     DECLARE_MESSAGE_MAP()
 
 private:
@@ -117,6 +128,10 @@ private:
     void RepositionClipsAfterRemoval();
     BOOL IsOverTimeline(CPoint screenPt);
     void AddClipToTimeline(const CString& clipPath);
+    void StartPlayback();
+    void StopPlayback();
+    void UpdatePlaybackFrame();
+    double GetCurrentClipDuration();
 };
 
 #ifndef _DEBUG
