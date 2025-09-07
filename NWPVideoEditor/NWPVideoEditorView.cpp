@@ -24,6 +24,7 @@ BEGIN_MESSAGE_MAP(NWPVideoEditorView, CView)
     ON_COMMAND(ID_FILE_EXPORT, OnFileExport)
     ON_COMMAND(ID_FILE_SAVE, OnFileSave)
     ON_COMMAND(ID_EDIT_ADDTEXT, OnEditAddText)
+    ON_BN_CLICKED(ID_ADD_TEXT_BUTTON, OnAddText)
     ON_NOTIFY(NM_DBLCLK, 1001, OnListDblClk)
     ON_NOTIFY(LVN_ITEMACTIVATE, 1001, OnListItemActivate)
     ON_NOTIFY(LVN_BEGINDRAG, 1001, OnListBeginDrag)
@@ -31,8 +32,10 @@ BEGIN_MESSAGE_MAP(NWPVideoEditorView, CView)
     ON_WM_MOUSEMOVE()
     ON_WM_LBUTTONUP()
     ON_WM_RBUTTONDOWN()
+    ON_WM_CONTEXTMENU()
     ON_COMMAND(ID_TIMELINE_REMOVE_CLIP, OnTimelineRemoveClip)
     ON_COMMAND(ID_TIMELINE_SPLIT_CLIP, OnTimelineSplitClip)
+    ON_COMMAND(32775, OnDeleteTextOverlay)
     ON_BN_CLICKED(ID_PLAY_PAUSE_BUTTON, OnPlayPause)
     ON_BN_CLICKED(ID_STOP_BUTTON, OnStop)
     ON_WM_TIMER()
@@ -66,7 +69,8 @@ NWPVideoEditorView::~NWPVideoEditorView()
     }
 }
 
-BOOL NWPVideoEditorView::PreCreateWindow(CREATESTRUCT& cs) {
+BOOL NWPVideoEditorView::PreCreateWindow(CREATESTRUCT& cs)
+{
     return CView::PreCreateWindow(cs);
 }
 
@@ -94,6 +98,10 @@ int NWPVideoEditorView::OnCreate(LPCREATESTRUCT cs)
         CRect(0, 0, 60, 25), this, ID_STOP_BUTTON))
         return -1;
 
+    if (!m_addTextButton.Create(_T("Add Text"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        CRect(0, 0, 70, 25), this, ID_ADD_TEXT_BUTTON))
+        return -1;
+
     return 0;
 }
 
@@ -111,6 +119,7 @@ void NWPVideoEditorView::Layout(int cx, int cy)
     const int margin = 10;
     const int buttonH = 25;
     const int buttonW = 60;
+    const int addTextButtonW = 70;
     const int buttonSpacing = 10;
 
     if (m_list.GetSafeHwnd())
@@ -128,6 +137,7 @@ void NWPVideoEditorView::Layout(int cx, int cy)
         int buttonY = previewY + previewH + 5;
         m_playPauseButton.MoveWindow(previewX, buttonY, buttonW, buttonH);
         m_stopButton.MoveWindow(previewX + buttonW + buttonSpacing, buttonY, buttonW, buttonH);
+        m_addTextButton.MoveWindow(previewX + (buttonW + buttonSpacing) * 2, buttonY, addTextButtonW, buttonH);
     }
 
     m_rcTimeline = CRect(margin, cy - timelineH, cx - margin, cy - margin);
@@ -207,6 +217,840 @@ void NWPVideoEditorView::OnFileImport()
         CString message;
         message.Format(_T("Successfully imported %d files."), (int)selectedFiles.size());
         AfxMessageBox(message);
+    }
+}
+
+void NWPVideoEditorView::OnAddText()
+{
+    CTextInputDialog dlg;
+
+    if (dlg.DoModal(this) == IDOK)
+    {
+        TextOverlay overlay;
+        overlay.text = dlg.GetText();
+        overlay.startSec = 0.0;
+        overlay.durSec = 5.0;
+        overlay.position = CPoint(50, 50);
+
+        m_textOverlays.push_back(overlay);
+        m_activeTextOverlayIndex = (int)m_textOverlays.size() - 1;
+
+        InvalidateRect(m_rcTimeline, FALSE);
+        InvalidateRect(m_rcPreview, FALSE);
+
+        CString message;
+        message.Format(_T("Text \"%s\" added! Click and drag it in the preview to reposition."), overlay.text);
+        AfxMessageBox(message);
+    }
+}
+
+int NWPVideoEditorView::HitTestTimelineTextOverlay(CPoint pt) const
+{
+    if (!m_rcTimeline.PtInRect(pt)) return -1;
+
+    const CRect& r = m_rcTimeline;
+    int textTrackTop = r.bottom - 50;
+    int textTrackBottom = r.bottom - 10;
+
+    if (pt.y < textTrackTop || pt.y > textTrackBottom) return -1;
+
+    for (int i = 0; i < (int)m_textOverlays.size(); i++)
+    {
+        const TextOverlay& overlay = m_textOverlays[i];
+        int startX = SecondsToTimelineX(overlay.startSec);
+        int endX = SecondsToTimelineX(overlay.startSec + overlay.durSec);
+
+        if (pt.x >= startX && pt.x <= endX)
+            return i;
+    }
+    return -1;
+}
+
+int NWPVideoEditorView::HitTestTextOverlayHandles(CPoint pt) const
+{
+    if (m_activeTextOverlayIndex < 0 || m_activeTextOverlayIndex >= (int)m_textOverlays.size())
+        return 0;
+
+    const TextOverlay& overlay = m_textOverlays[m_activeTextOverlayIndex];
+    const CRect& r = m_rcTimeline;
+    int textTrackTop = r.bottom - 50;
+    int textTrackBottom = r.bottom - 10;
+
+    int startX = SecondsToTimelineX(overlay.startSec);
+    int endX = SecondsToTimelineX(overlay.startSec + overlay.durSec);
+
+    if (pt.x >= startX && pt.x <= startX + 8 && pt.y >= textTrackTop && pt.y <= textTrackBottom)
+        return 1;
+
+    if (pt.x >= endX - 8 && pt.x <= endX && pt.y >= textTrackTop && pt.y <= textTrackBottom)
+        return 2;
+
+    return 0;
+}
+
+int NWPVideoEditorView::HitTestTextOverlayInPreview(CPoint pt) const
+{
+    if (!m_rcPreview.PtInRect(pt)) return -1;
+
+    CRect previewInner = m_rcPreview;
+    previewInner.DeflateRect(2, 2);
+
+    CPoint relativePt(pt.x - previewInner.left, pt.y - previewInner.top);
+
+    for (int i = (int)m_textOverlays.size() - 1; i >= 0; i--)
+    {
+        const TextOverlay& overlay = m_textOverlays[i];
+
+        CRect textBounds(overlay.position.x - 10, overlay.position.y - 10,
+            overlay.position.x + 200, overlay.position.y + 40);
+
+        if (textBounds.PtInRect(relativePt))
+            return i;
+    }
+
+    return -1;
+}
+
+void NWPVideoEditorView::DrawTextOverlays(CDC* pDC)
+{
+    CRect previewInner = m_rcPreview;
+    previewInner.DeflateRect(2, 2);
+
+    for (int i = 0; i < (int)m_textOverlays.size(); i++)
+    {
+        const TextOverlay& overlay = m_textOverlays[i];
+
+        CFont font;
+        font.CreateFont(overlay.fontSize, 0, 0, 0, FW_BOLD, FALSE, FALSE, 0,
+            ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SWISS, overlay.fontName);
+
+        CFont* oldFont = pDC->SelectObject(&font);
+        pDC->SetBkMode(TRANSPARENT);
+
+        CPoint textPos(previewInner.left + overlay.position.x, previewInner.top + overlay.position.y);
+
+        pDC->SetTextColor(RGB(0, 0, 0));
+        pDC->TextOut(textPos.x + 3, textPos.y + 3, overlay.text);
+
+        pDC->SetTextColor(overlay.color);
+        pDC->TextOut(textPos.x, textPos.y, overlay.text);
+
+        if (i == m_draggingTextIndex)
+        {
+            CSize textSize = pDC->GetTextExtent(overlay.text);
+            CRect selRect(textPos.x - 5, textPos.y - 5,
+                textPos.x + textSize.cx + 5, textPos.y + textSize.cy + 5);
+            CPen selPen(PS_DOT, 1, RGB(255, 255, 0));
+            CPen* oldPen = pDC->SelectObject(&selPen);
+            CBrush* oldBrush = (CBrush*)pDC->SelectStockObject(NULL_BRUSH);
+            pDC->Rectangle(selRect);
+            pDC->SelectObject(oldPen);
+            pDC->SelectObject(oldBrush);
+        }
+
+        pDC->SelectObject(oldFont);
+    }
+}
+
+CStringA NWPVideoEditorView::BuildTextOverlayFilter() const
+{
+    if (m_textOverlays.empty()) return "";
+
+    CStringA filter;
+
+    for (int i = 0; i < (int)m_textOverlays.size(); i++)
+    {
+        const TextOverlay& overlay = m_textOverlays[i];
+
+        CStringA text(overlay.text);
+        text.Replace(":", "\\:");
+        text.Replace("'", "\\'");
+
+        int x = (overlay.position.x * 480) / 476;
+        int y = (overlay.position.y * 360) / 356;
+
+        CStringA overlayFilter;
+        overlayFilter.Format("drawtext=text='%s':fontsize=%d:fontcolor=white:x=%d:y=%d:enable='between(t,%.2f,%.2f)'",
+            text.GetString(),
+            overlay.fontSize,
+            x, y,
+            overlay.startSec,
+            overlay.startSec + overlay.durSec);
+
+        if (i > 0) filter += ",";
+        filter += overlayFilter;
+    }
+
+    return filter;
+}
+
+void NWPVideoEditorView::OnContextMenu(CWnd* /*pWnd*/, CPoint point)
+{
+    ScreenToClient(&point);
+
+    int textHit = HitTestTimelineTextOverlay(point);
+    if (textHit >= 0)
+    {
+        m_activeTextOverlayIndex = textHit;
+
+        CMenu menu;
+        menu.CreatePopupMenu();
+
+        CString menuText;
+        menuText.Format(_T("Delete \"%s\""), m_textOverlays[textHit].text);
+        menu.AppendMenu(MF_STRING, 32775, menuText);
+
+        CPoint screenPt = point;
+        ClientToScreen(&screenPt);
+        menu.TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, screenPt.x, screenPt.y, this);
+        return;
+    }
+
+    if (m_rcTimeline.PtInRect(point))
+    {
+        OnRButtonDown(0, point);
+    }
+}
+
+void NWPVideoEditorView::OnDeleteTextOverlay()
+{
+    if (m_activeTextOverlayIndex >= 0 && m_activeTextOverlayIndex < (int)m_textOverlays.size())
+    {
+        CString message;
+        message.Format(_T("Delete text overlay \"%s\"?"), m_textOverlays[m_activeTextOverlayIndex].text);
+
+        if (AfxMessageBox(message, MB_YESNO | MB_ICONQUESTION) == IDYES)
+        {
+            m_textOverlays.erase(m_textOverlays.begin() + m_activeTextOverlayIndex);
+            m_activeTextOverlayIndex = -1;
+            InvalidateRect(m_rcTimeline, FALSE);
+            InvalidateRect(m_rcPreview, FALSE);
+            AfxMessageBox(_T("Text overlay deleted."));
+        }
+    }
+}
+
+void NWPVideoEditorView::OnLButtonDown(UINT nFlags, CPoint pt)
+{
+    int previewTextHit = HitTestTextOverlayInPreview(pt);
+    if (previewTextHit >= 0)
+    {
+        m_draggingTextIndex = previewTextHit;
+        m_dragState = DRAG_TEXT_PREVIEW;
+        m_textDragStart = pt;
+        SetCapture();
+        InvalidateRect(m_rcPreview, FALSE);
+        return;
+    }
+
+    int timelineTextHit = HitTestTimelineTextOverlay(pt);
+    if (timelineTextHit >= 0)
+    {
+        m_activeTextOverlayIndex = timelineTextHit;
+
+        int handleHit = HitTestTextOverlayHandles(pt);
+        if (handleHit == 1)
+        {
+            m_dragState = DRAG_TEXT_LEFT_HANDLE;
+            m_dragStart = pt;
+            m_dragStartTextStart = m_textOverlays[timelineTextHit].startSec;
+            m_dragStartTextDur = m_textOverlays[timelineTextHit].durSec;
+            SetCapture();
+        }
+        else if (handleHit == 2)
+        {
+            m_dragState = DRAG_TEXT_RIGHT_HANDLE;
+            m_dragStart = pt;
+            m_dragStartTextStart = m_textOverlays[timelineTextHit].startSec;
+            m_dragStartTextDur = m_textOverlays[timelineTextHit].durSec;
+            SetCapture();
+        }
+        else
+        {
+            m_dragState = DRAG_TEXT_TIMELINE;
+            m_dragStart = pt;
+            m_dragStartTimelinePos = m_textOverlays[timelineTextHit].startSec;
+            SetCapture();
+        }
+
+        InvalidateRect(m_rcTimeline, FALSE);
+        return;
+    }
+
+    if (!m_rcTimeline.PtInRect(pt))
+        return;
+
+    m_dragState = DRAG_NONE;
+    int hitClipIndex = HitTestTimelineClip(pt);
+    if (hitClipIndex >= 0)
+    {
+        m_activeTimelineClipIndex = hitClipIndex;
+        UpdatePreview();
+        int hit = HitTestTimelineHandle(pt);
+        if (hit == 3)
+        {
+            m_dragState = DRAG_LEFT_HANDLE;
+            m_dragStart = pt;
+            const TimelineClip& clip = m_timelineClips[m_activeTimelineClipIndex];
+            m_dragStartClipStart = clip.clipStartSec;
+            m_dragStartClipLength = clip.clipLengthSec;
+            m_dragStartTimelinePos = clip.startTimeOnTimeline;
+            SetCapture();
+        }
+        else if (hit == 2)
+        {
+            m_dragState = DRAG_RIGHT_HANDLE;
+            m_dragStart = pt;
+            const TimelineClip& clip = m_timelineClips[m_activeTimelineClipIndex];
+            m_dragStartClipStart = clip.clipStartSec;
+            m_dragStartClipLength = clip.clipLengthSec;
+            SetCapture();
+        }
+        else if (hit == 1)
+        {
+            m_dragState = DRAG_CLIP_MOVE;
+            m_dragStart = pt;
+            const TimelineClip& clip = m_timelineClips[m_activeTimelineClipIndex];
+            m_dragStartTimelinePos = clip.startTimeOnTimeline;
+            SetCapture();
+        }
+        InvalidateRect(m_rcTimeline, FALSE);
+    }
+    else
+    {
+        m_activeTimelineClipIndex = -1;
+        UpdatePreview();
+        InvalidateRect(m_rcTimeline, FALSE);
+    }
+}
+
+void NWPVideoEditorView::OnMouseMove(UINT nFlags, CPoint point)
+{
+    if (m_bDragging && m_pDragImage)
+    {
+        CPoint ptScreen(point);
+        ClientToScreen(&ptScreen);
+        m_pDragImage->DragMove(ptScreen);
+        if (IsOverTimeline(ptScreen))
+            SetCursor(LoadCursor(NULL, IDC_ARROW));
+        else
+            SetCursor(LoadCursor(NULL, IDC_NO));
+        return;
+    }
+
+    if (m_dragState == DRAG_TEXT_PREVIEW && GetCapture() == this && m_draggingTextIndex >= 0)
+    {
+        TextOverlay& overlay = m_textOverlays[m_draggingTextIndex];
+
+        CPoint delta = point - m_textDragStart;
+
+        CRect previewInner = m_rcPreview;
+        previewInner.DeflateRect(2, 2);
+
+        CPoint newPos = overlay.position + delta;
+
+        if (newPos.x < 10) newPos.x = 10;
+        if (newPos.y < 10) newPos.y = 10;
+        if (newPos.x > previewInner.Width() - 200) newPos.x = previewInner.Width() - 200;
+        if (newPos.y > previewInner.Height() - 40) newPos.y = previewInner.Height() - 40;
+
+        overlay.position = newPos;
+        m_textDragStart = point;
+
+        InvalidateRect(m_rcPreview, FALSE);
+        return;
+    }
+
+    if (m_dragState == DRAG_TEXT_LEFT_HANDLE || m_dragState == DRAG_TEXT_RIGHT_HANDLE)
+    {
+        if (m_activeTextOverlayIndex >= 0 && GetCapture() == this)
+        {
+            TextOverlay& overlay = m_textOverlays[m_activeTextOverlayIndex];
+            double deltaTime = TimelineXToSeconds(point.x) - TimelineXToSeconds(m_dragStart.x);
+
+            if (m_dragState == DRAG_TEXT_LEFT_HANDLE)
+            {
+                double newStart = max(0.0, m_dragStartTextStart + deltaTime);
+                double newDur = max(0.5, m_dragStartTextDur - deltaTime);
+                overlay.startSec = newStart;
+                overlay.durSec = newDur;
+            }
+            else if (m_dragState == DRAG_TEXT_RIGHT_HANDLE)
+            {
+                overlay.durSec = max(0.5, m_dragStartTextDur + deltaTime);
+            }
+
+            InvalidateRect(m_rcTimeline, FALSE);
+            return;
+        }
+    }
+
+    if (m_dragState == DRAG_TEXT_TIMELINE && GetCapture() == this &&
+        m_activeTextOverlayIndex >= 0 && m_activeTextOverlayIndex < (int)m_textOverlays.size())
+    {
+        TextOverlay& overlay = m_textOverlays[m_activeTextOverlayIndex];
+        double deltaTime = TimelineXToSeconds(point.x) - TimelineXToSeconds(m_dragStart.x);
+        double newStartTime = max(0.0, m_dragStartTimelinePos + deltaTime);
+
+        overlay.startSec = newStartTime;
+
+        InvalidateRect(m_rcTimeline, FALSE);
+        return;
+    }
+
+    if (m_dragState != DRAG_NONE && GetCapture() == this &&
+        m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
+    {
+        TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
+
+        if (m_dragState == DRAG_LEFT_HANDLE)
+        {
+            double newTimelinePos = m_dragStartTimelinePos + TimelineXToSeconds(point.x) - TimelineXToSeconds(m_dragStart.x);
+            if (newTimelinePos < 0.0)
+            {
+                newTimelinePos = 0.0;
+                activeClip.startTimeOnTimeline = newTimelinePos;
+            }
+            else
+            {
+                double deltaSeconds = TimelineXToSeconds(point.x) - TimelineXToSeconds(m_dragStart.x);
+                double newClipStart = max(0.0, min(activeClip.originalDuration - 1.0,
+                    m_dragStartClipStart - deltaSeconds));
+                double rightEdgeTime = m_dragStartTimelinePos + m_dragStartClipLength;
+                double newLength = max(1.0, rightEdgeTime - newTimelinePos);
+                if (newClipStart + newLength > activeClip.originalDuration) {
+                    newLength = activeClip.originalDuration - newClipStart;
+                }
+                if (newLength < 1.0) {
+                    newLength = 1.0;
+                    newClipStart = max(0.0, activeClip.originalDuration - newLength);
+                }
+                activeClip.startTimeOnTimeline = newTimelinePos;
+                activeClip.clipStartSec = newClipStart;
+                activeClip.clipLengthSec = newLength;
+            }
+        }
+        else if (m_dragState == DRAG_RIGHT_HANDLE)
+        {
+            double currentTime = TimelineXToSeconds(point.x);
+            double deltaTime = currentTime - TimelineXToSeconds(m_dragStart.x);
+            double newLength = m_dragStartClipLength + deltaTime;
+            double maxLength = activeClip.originalDuration - activeClip.clipStartSec;
+            activeClip.clipLengthSec = max(1.0, min(maxLength, newLength));
+        }
+        else if (m_dragState == DRAG_CLIP_MOVE)
+        {
+            double currentTime = TimelineXToSeconds(point.x);
+            double deltaTime = currentTime - TimelineXToSeconds(m_dragStart.x);
+            double newPos = max(0.0, m_dragStartTimelinePos + deltaTime);
+            bool canMove = true;
+            for (int i = 0; i < (int)m_timelineClips.size(); i++)
+            {
+                if (i == m_activeTimelineClipIndex) continue;
+                const TimelineClip& otherClip = m_timelineClips[i];
+                double otherStart = otherClip.startTimeOnTimeline;
+                double otherEnd = otherClip.startTimeOnTimeline + otherClip.clipLengthSec;
+                double thisEnd = newPos + activeClip.clipLengthSec;
+                if (!(thisEnd <= otherStart || newPos >= otherEnd))
+                {
+                    canMove = false;
+                    break;
+                }
+            }
+            if (canMove)
+            {
+                activeClip.startTimeOnTimeline = newPos;
+            }
+        }
+        InvalidateRect(m_rcTimeline, FALSE);
+        return;
+    }
+
+    if (m_rcTimeline.PtInRect(point) && m_dragState == DRAG_NONE)
+    {
+        int hitClipIndex = HitTestTimelineClip(point);
+        if (hitClipIndex >= 0)
+        {
+            m_hoverClipIndex = hitClipIndex;
+            const TimelineClip& clip = m_timelineClips[hitClipIndex];
+
+            int clipStartX = SecondsToTimelineX(clip.startTimeOnTimeline);
+            int clipEndX = SecondsToTimelineX(clip.startTimeOnTimeline + clip.clipLengthSec);
+
+            double clipRatio = (double)(point.x - clipStartX) / (clipEndX - clipStartX);
+            clipRatio = max(0.0, min(1.0, clipRatio));
+
+            m_hoverTimePosition = clip.clipStartSec + (clipRatio * clip.clipLengthSec);
+            m_showSelectionBar = true;
+
+            if (hitClipIndex == m_activeTimelineClipIndex)
+            {
+                int hit = HitTestTimelineHandle(point);
+                if (hit == 2 || hit == 3)
+                    SetCursor(LoadCursor(NULL, IDC_SIZEWE));
+                else if (hit == 1)
+                    SetCursor(LoadCursor(NULL, IDC_SIZEALL));
+                else
+                    SetCursor(LoadCursor(NULL, IDC_IBEAM));
+            }
+            else
+            {
+                SetCursor(LoadCursor(NULL, IDC_IBEAM));
+            }
+
+            InvalidateRect(m_rcTimeline, FALSE);
+        }
+        else
+        {
+            if (m_showSelectionBar)
+            {
+                m_showSelectionBar = false;
+                m_hoverClipIndex = -1;
+                m_hoverTimePosition = -1.0;
+                InvalidateRect(m_rcTimeline, FALSE);
+            }
+            SetCursor(LoadCursor(NULL, IDC_ARROW));
+        }
+    }
+    else
+    {
+        if (m_showSelectionBar)
+        {
+            m_showSelectionBar = false;
+            m_hoverClipIndex = -1;
+            m_hoverTimePosition = -1.0;
+            InvalidateRect(m_rcTimeline, FALSE);
+        }
+    }
+
+    // Change cursor when hovering over text in preview
+    if (m_rcPreview.PtInRect(point) && HitTestTextOverlayInPreview(point) >= 0)
+    {
+        SetCursor(LoadCursor(NULL, IDC_SIZEALL));
+    }
+}
+
+void NWPVideoEditorView::OnLButtonUp(UINT nFlags, CPoint point)
+{
+    if (m_dragState == DRAG_TEXT_PREVIEW)
+    {
+        if (GetCapture() == this) ReleaseCapture();
+        m_dragState = DRAG_NONE;
+        m_draggingTextIndex = -1;
+        InvalidateRect(m_rcPreview, FALSE);
+        return;
+    }
+
+    if (m_bDragging)
+    {
+        if (GetCapture() == this) ReleaseCapture();
+        m_bDragging = FALSE;
+        if (m_pDragImage)
+        {
+            m_pDragImage->DragLeave(GetDesktopWindow());
+            m_pDragImage->EndDrag();
+            delete m_pDragImage;
+            m_pDragImage = nullptr;
+        }
+        CPoint ptScreen(point);
+        ClientToScreen(&ptScreen);
+        if (IsOverTimeline(ptScreen) && m_nDragIndex >= 0 && m_nDragIndex < (int)m_importedClips.size())
+        {
+            AddClipToTimeline(m_importedClips[m_nDragIndex].path);
+        }
+        m_nDragIndex = -1;
+        return;
+    }
+    if (m_dragState != DRAG_NONE)
+    {
+        if (GetCapture() == this) ReleaseCapture();
+        m_dragState = DRAG_NONE;
+        InvalidateRect(m_rcTimeline, FALSE);
+    }
+}
+
+void NWPVideoEditorView::OnDraw(CDC* pDC)
+{
+    DrawTimeline(pDC);
+    DrawPreviewFrame(pDC);
+}
+
+void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC)
+{
+    if (m_rcPreview.IsRectEmpty()) return;
+    pDC->FillSolidRect(m_rcPreview, RGB(20, 20, 20));
+    pDC->Draw3dRect(m_rcPreview, RGB(80, 80, 80), RGB(40, 40, 40));
+    CRect innerRect = m_rcPreview;
+    innerRect.DeflateRect(2, 2);
+    if (m_hPreviewBitmap)
+    {
+        CDC memDC;
+        memDC.CreateCompatibleDC(pDC);
+        HBITMAP oldBitmap = (HBITMAP)memDC.SelectObject(m_hPreviewBitmap);
+        BITMAP bmp;
+        GetObject(m_hPreviewBitmap, sizeof(BITMAP), &bmp);
+        pDC->StretchBlt(innerRect.left, innerRect.top, innerRect.Width(), innerRect.Height(),
+            &memDC, 0, 0, bmp.bmWidth, bmp.bmHeight, SRCCOPY);
+        memDC.SelectObject(oldBitmap);
+    }
+    else
+    {
+        pDC->FillSolidRect(innerRect, RGB(40, 40, 40));
+        pDC->SetTextColor(RGB(150, 150, 150));
+        pDC->SetBkMode(TRANSPARENT);
+        pDC->DrawText(_T("Loading frame..."), innerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    DrawTextOverlays(pDC);
+
+    CRect infoRect = m_rcPreview;
+    infoRect.top = infoRect.bottom + 35;
+    infoRect.bottom = infoRect.top + 20;
+    if (!m_currentPreviewPath.IsEmpty())
+    {
+        CString filename = m_currentPreviewPath;
+        int lastSlash = filename.ReverseFind('\\');
+        if (lastSlash != -1) filename = filename.Mid(lastSlash + 1);
+        CString info;
+        info.Format(_T("%s @ %.2fs %s"), filename, m_previewTimePosition,
+            m_isPlaying ? _T("(Playing)") : _T(""));
+        pDC->SetTextColor(RGB(200, 200, 200));
+        pDC->SetBkMode(TRANSPARENT);
+        pDC->DrawText(info, infoRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    }
+}
+
+void NWPVideoEditorView::DrawTimeline(CDC* pDC)
+{
+    CRect r = m_rcTimeline;
+    pDC->FillSolidRect(r, RGB(28, 28, 28));
+    pDC->DrawEdge(r, EDGE_SUNKEN, BF_RECT);
+    pDC->SetTextColor(RGB(230, 230, 230));
+    pDC->TextOut(r.left + 10, r.top + 10, _T("Timeline"));
+
+    if (m_timelineClips.empty() && m_textOverlays.empty()) {
+        pDC->TextOut(r.left + 10, r.top + 30, _T("Double-click or drag clips above to place them on the timeline."));
+        return;
+    }
+
+    int top = r.top + 48;
+    int bottom = r.bottom - 56;
+
+    for (int i = 0; i < (int)m_timelineClips.size(); i++)
+    {
+        const TimelineClip& clip = m_timelineClips[i];
+        int clipStartX = SecondsToTimelineX(clip.startTimeOnTimeline);
+        int clipEndX = SecondsToTimelineX(clip.startTimeOnTimeline + clip.clipLengthSec);
+        CRect clipR(clipStartX, top, clipEndX, bottom);
+
+        COLORREF clipColor = (i == m_activeTimelineClipIndex) ? RGB(70, 120, 220) : RGB(90, 90, 120);
+        COLORREF borderColor = (i == m_activeTimelineClipIndex) ? RGB(30, 60, 140) : RGB(60, 60, 80);
+
+        pDC->FillSolidRect(clipR, clipColor);
+        pDC->FrameRect(clipR, &CBrush(borderColor));
+
+        if (m_showSelectionBar && m_hoverClipIndex == i)
+        {
+            double clipRatio = (m_hoverTimePosition - clip.clipStartSec) / clip.clipLengthSec;
+            clipRatio = max(0.0, min(1.0, clipRatio));
+            int selectionX = clipStartX + (int)(clipRatio * (clipEndX - clipStartX));
+
+            CPen selectionPen(PS_SOLID, 2, RGB(255, 255, 0));
+            CPen* oldPen = pDC->SelectObject(&selectionPen);
+            pDC->MoveTo(selectionX, clipR.top);
+            pDC->LineTo(selectionX, clipR.bottom);
+            pDC->SelectObject(oldPen);
+
+            CString timeText;
+            timeText.Format(_T("%.2fs"), m_hoverTimePosition);
+            CRect timeRect(selectionX - 30, clipR.top - 20, selectionX + 30, clipR.top - 2);
+            pDC->SetBkColor(RGB(255, 255, 0));
+            pDC->SetTextColor(RGB(0, 0, 0));
+            pDC->DrawText(timeText, timeRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
+
+        if (i == m_activeTimelineClipIndex)
+        {
+            CRect leftHandleR(clipR.left, clipR.top, clipR.left + 8, clipR.bottom);
+            pDC->FillSolidRect(leftHandleR, RGB(255, 160, 160));
+            CRect rightHandleR(clipR.right - 8, clipR.top, clipR.right, clipR.bottom);
+            pDC->FillSolidRect(rightHandleR, RGB(160, 200, 255));
+        }
+
+        CString clipText;
+        clipText.Format(_T("%.1fs"), clip.clipLengthSec);
+        CRect textR = clipR;
+        textR.DeflateRect(12, 2);
+        pDC->SetBkMode(TRANSPARENT);
+        pDC->SetTextColor(RGB(255, 255, 255));
+        pDC->DrawText(clipText, textR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    int textTrackTop = r.bottom - 50;
+    int textTrackBottom = r.bottom - 10;
+
+    pDC->SetTextColor(RGB(200, 200, 200));
+    pDC->TextOut(r.left + 10, textTrackTop - 15, _T("Text Overlays:"));
+
+    for (int i = 0; i < (int)m_textOverlays.size(); i++)
+    {
+        const TextOverlay& overlay = m_textOverlays[i];
+        int startX = SecondsToTimelineX(overlay.startSec);
+        int endX = SecondsToTimelineX(overlay.startSec + overlay.durSec);
+
+        CRect textRect(startX, textTrackTop, endX, textTrackBottom);
+
+        COLORREF textColor = (i == m_activeTextOverlayIndex) ? RGB(255, 200, 100) : RGB(200, 150, 100);
+        COLORREF borderColor = (i == m_activeTextOverlayIndex) ? RGB(200, 160, 80) : RGB(150, 120, 80);
+
+        pDC->FillSolidRect(textRect, textColor);
+        pDC->FrameRect(textRect, &CBrush(borderColor));
+
+        if (i == m_activeTextOverlayIndex)
+        {
+            CRect leftHandle(textRect.left, textRect.top, textRect.left + 8, textRect.bottom);
+            pDC->FillSolidRect(leftHandle, RGB(255, 160, 160));
+            CRect rightHandle(textRect.right - 8, textRect.top, textRect.right, textRect.bottom);
+            pDC->FillSolidRect(rightHandle, RGB(160, 200, 255));
+        }
+
+        CString displayText = overlay.text;
+        if (displayText.GetLength() > 10)
+        {
+            displayText = displayText.Left(7) + _T("...");
+        }
+
+        pDC->SetTextColor(RGB(0, 0, 0));
+        pDC->SetBkMode(TRANSPARENT);
+        pDC->DrawText(displayText, textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    for (const auto& ov : m_overlays) {
+        int x1 = SecondsToTimelineX(ov.startSec);
+        int x2 = SecondsToTimelineX(ov.startSec + ov.durSec);
+        if (x2 > x1) {
+            CRect ovR(x1, r.bottom - 24, x2, r.bottom - 4);
+            pDC->FillSolidRect(ovR, RGB(255, 200, 100));
+            pDC->FrameRect(ovR, &CBrush(RGB(200, 160, 80)));
+            pDC->SetTextColor(RGB(0, 0, 0));
+            pDC->DrawText(ov.text, ovR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
+    }
+
+    if (m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
+    {
+        const TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
+        CString infoText;
+        infoText.Format(_T("Active Clip - Timeline Pos: %.1fs | Clip Start: %.1fs | Length: %.1fs"),
+            activeClip.startTimeOnTimeline, activeClip.clipStartSec, activeClip.clipLengthSec);
+        pDC->SetTextColor(RGB(200, 255, 200));
+        pDC->TextOut(r.left + 10, r.top + 30, infoText);
+    }
+    else if (m_activeTextOverlayIndex >= 0 && m_activeTextOverlayIndex < (int)m_textOverlays.size())
+    {
+        const TextOverlay& activeOverlay = m_textOverlays[m_activeTextOverlayIndex];
+        CString infoText;
+        infoText.Format(_T("Active Text: \"%s\" | Start: %.1fs | Duration: %.1fs | Position: (%d,%d)"),
+            activeOverlay.text, activeOverlay.startSec, activeOverlay.durSec,
+            activeOverlay.position.x, activeOverlay.position.y);
+        pDC->SetTextColor(RGB(255, 255, 200));
+        pDC->TextOut(r.left + 10, r.top + 30, infoText);
+    }
+}
+
+void NWPVideoEditorView::OnFileExport()
+{
+    if (m_timelineClips.empty()) {
+        AfxMessageBox(L"Add clips to the timeline first.");
+        return;
+    }
+
+    CFileDialog sfd(FALSE, L"mp4", L"output.mp4", OFN_OVERWRITEPROMPT,
+        L"MP4 video|*.mp4|All Files|*.*||");
+    sfd.m_ofn.lpstrDefExt = L"mp4";
+    if (sfd.DoModal() != IDOK) return;
+
+    CString out = sfd.GetPathName();
+    if (out.ReverseFind(L'.') < 0)
+        out += L".mp4";
+
+    std::vector<TimelineClip> sortedClips = m_timelineClips;
+    std::sort(sortedClips.begin(), sortedClips.end(),
+        [](const TimelineClip& a, const TimelineClip& b) {
+            return a.startTimeOnTimeline < b.startTimeOnTimeline;
+        });
+
+    CStringA textFilter = BuildTextOverlayFilter();
+
+    if (sortedClips.size() == 1)
+    {
+        const TimelineClip& clip = sortedClips[0];
+        CStringA inA(clip.path);
+        CStringA outA(out);
+        CStringA ff;
+
+        if (!textFilter.IsEmpty())
+        {
+            ff.Format("ffmpeg -y -ss %.3f -i \"%s\" -t %.3f -vf \"%s\" -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
+                clip.clipStartSec, inA.GetString(), clip.clipLengthSec, textFilter.GetString(), outA.GetString());
+        }
+        else
+        {
+            ff.Format("ffmpeg -y -ss %.3f -i \"%s\" -t %.3f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
+                clip.clipStartSec, inA.GetString(), clip.clipLengthSec, outA.GetString());
+        }
+
+        ExecuteFFmpegCommand(ff.GetString());
+    }
+    else
+    {
+        CStringA outA(out);
+        CStringA ff;
+
+        ff = "ffmpeg -y";
+        for (const auto& clip : sortedClips)
+        {
+            CStringA pathA(clip.path);
+            CStringA input;
+            input.Format(" -ss %.3f -t %.3f -i \"%s\"",
+                clip.clipStartSec, clip.clipLengthSec, pathA.GetString());
+            ff += input;
+        }
+
+        CStringA filterComplex = " -filter_complex \"";
+        for (int i = 0; i < (int)sortedClips.size(); i++)
+        {
+            CStringA segment;
+            segment.Format("[%d:v:0][%d:a:0]", i, i);
+            filterComplex += segment;
+        }
+
+        CStringA concatFilter;
+        concatFilter.Format("concat=n=%d:v=1:a=1[concat_v][concat_a]", (int)sortedClips.size());
+        filterComplex += concatFilter;
+
+        if (!textFilter.IsEmpty())
+        {
+            filterComplex += ";[concat_v]";
+            filterComplex += textFilter;
+            filterComplex += "[outv]\"";
+            ff += filterComplex;
+            ff += " -map \"[outv]\" -map \"[concat_a]\"";
+        }
+        else
+        {
+            filterComplex += "\"";
+            ff += filterComplex;
+            ff += " -map \"[concat_v]\" -map \"[concat_a]\"";
+        }
+
+        ff += " -c:v libx264 -preset veryfast -crf 20 -c:a aac";
+        CStringA outputPart;
+        outputPart.Format(" \"%s\"", outA.GetString());
+        ff += outputPart;
+
+        ExecuteFFmpegCommand(ff.GetString());
     }
 }
 
@@ -591,7 +1435,7 @@ int NWPVideoEditorView::HitTestTimelineClip(CPoint pt) const
     if (m_timelineClips.empty()) return -1;
     const CRect& r = m_rcTimeline;
     int top = r.top + 48;
-    int bottom = r.bottom - 36;
+    int bottom = r.bottom - 56;
     for (int i = 0; i < (int)m_timelineClips.size(); i++)
     {
         const TimelineClip& clip = m_timelineClips[i];
@@ -613,7 +1457,7 @@ int NWPVideoEditorView::HitTestTimelineHandle(CPoint pt) const
     const TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
     const CRect& r = m_rcTimeline;
     int top = r.top + 48;
-    int bottom = r.bottom - 36;
+    int bottom = r.bottom - 56;
     int clipStartX = SecondsToTimelineX(activeClip.startTimeOnTimeline);
     int clipEndX = SecondsToTimelineX(activeClip.startTimeOnTimeline + activeClip.clipLengthSec);
     CRect clipR(clipStartX, top, clipEndX, bottom);
@@ -645,272 +1489,6 @@ int NWPVideoEditorView::SecondsToTimelineX(double seconds) const
     if (m_timelineDurationSec <= 0) return left;
     double ratio = (seconds - m_timelineScrollOffset) / m_timelineDurationSec;
     return left + (int)(ratio * timelineWidth);
-}
-
-void NWPVideoEditorView::OnLButtonDown(UINT nFlags, CPoint pt)
-{
-    if (!m_rcTimeline.PtInRect(pt))
-        return;
-    m_dragState = DRAG_NONE;
-    int hitClipIndex = HitTestTimelineClip(pt);
-    if (hitClipIndex >= 0)
-    {
-        m_activeTimelineClipIndex = hitClipIndex;
-        UpdatePreview();
-        int hit = HitTestTimelineHandle(pt);
-        if (hit == 3)
-        {
-            m_dragState = DRAG_LEFT_HANDLE;
-            m_dragStart = pt;
-            const TimelineClip& clip = m_timelineClips[m_activeTimelineClipIndex];
-            m_dragStartClipStart = clip.clipStartSec;
-            m_dragStartClipLength = clip.clipLengthSec;
-            m_dragStartTimelinePos = clip.startTimeOnTimeline;
-            SetCapture();
-        }
-        else if (hit == 2)
-        {
-            m_dragState = DRAG_RIGHT_HANDLE;
-            m_dragStart = pt;
-            const TimelineClip& clip = m_timelineClips[m_activeTimelineClipIndex];
-            m_dragStartClipStart = clip.clipStartSec;
-            m_dragStartClipLength = clip.clipLengthSec;
-            SetCapture();
-        }
-        else if (hit == 1)
-        {
-            m_dragState = DRAG_CLIP_MOVE;
-            m_dragStart = pt;
-            const TimelineClip& clip = m_timelineClips[m_activeTimelineClipIndex];
-            m_dragStartTimelinePos = clip.startTimeOnTimeline;
-            SetCapture();
-        }
-        InvalidateRect(m_rcTimeline, FALSE);
-    }
-    else
-    {
-        m_activeTimelineClipIndex = -1;
-        UpdatePreview();
-        InvalidateRect(m_rcTimeline, FALSE);
-    }
-}
-
-void NWPVideoEditorView::OnMouseMove(UINT nFlags, CPoint point)
-{
-    if (m_bDragging && m_pDragImage)
-    {
-        CPoint ptScreen(point);
-        ClientToScreen(&ptScreen);
-        m_pDragImage->DragMove(ptScreen);
-        if (IsOverTimeline(ptScreen))
-            SetCursor(LoadCursor(NULL, IDC_ARROW));
-        else
-            SetCursor(LoadCursor(NULL, IDC_NO));
-        return;
-    }
-
-    if (m_dragState != DRAG_NONE && GetCapture() == this &&
-        m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
-    {
-        TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
-
-        if (m_dragState == DRAG_LEFT_HANDLE)
-        {
-            double newTimelinePos = m_dragStartTimelinePos + TimelineXToSeconds(point.x) - TimelineXToSeconds(m_dragStart.x);
-            if (newTimelinePos < 0.0)
-            {
-                newTimelinePos = 0.0;
-                activeClip.startTimeOnTimeline = newTimelinePos;
-            }
-            else
-            {
-                double deltaSeconds = TimelineXToSeconds(point.x) - TimelineXToSeconds(m_dragStart.x);
-                double newClipStart = max(0.0, min(activeClip.originalDuration - 1.0,
-                    m_dragStartClipStart - deltaSeconds));
-                double rightEdgeTime = m_dragStartTimelinePos + m_dragStartClipLength;
-                double newLength = max(1.0, rightEdgeTime - newTimelinePos);
-                if (newClipStart + newLength > activeClip.originalDuration) {
-                    newLength = activeClip.originalDuration - newClipStart;
-                }
-                if (newLength < 1.0) {
-                    newLength = 1.0;
-                    newClipStart = max(0.0, activeClip.originalDuration - newLength);
-                }
-                activeClip.startTimeOnTimeline = newTimelinePos;
-                activeClip.clipStartSec = newClipStart;
-                activeClip.clipLengthSec = newLength;
-            }
-        }
-        else if (m_dragState == DRAG_RIGHT_HANDLE)
-        {
-            double currentTime = TimelineXToSeconds(point.x);
-            double deltaTime = currentTime - TimelineXToSeconds(m_dragStart.x);
-            double newLength = m_dragStartClipLength + deltaTime;
-            double maxLength = activeClip.originalDuration - activeClip.clipStartSec;
-            activeClip.clipLengthSec = max(1.0, min(maxLength, newLength));
-        }
-        else if (m_dragState == DRAG_CLIP_MOVE)
-        {
-            double currentTime = TimelineXToSeconds(point.x);
-            double deltaTime = currentTime - TimelineXToSeconds(m_dragStart.x);
-            double newPos = max(0.0, m_dragStartTimelinePos + deltaTime);
-            bool canMove = true;
-            for (int i = 0; i < (int)m_timelineClips.size(); i++)
-            {
-                if (i == m_activeTimelineClipIndex) continue;
-                const TimelineClip& otherClip = m_timelineClips[i];
-                double otherStart = otherClip.startTimeOnTimeline;
-                double otherEnd = otherClip.startTimeOnTimeline + otherClip.clipLengthSec;
-                double thisEnd = newPos + activeClip.clipLengthSec;
-                if (!(thisEnd <= otherStart || newPos >= otherEnd))
-                {
-                    canMove = false;
-                    break;
-                }
-            }
-            if (canMove)
-            {
-                activeClip.startTimeOnTimeline = newPos;
-            }
-        }
-        InvalidateRect(m_rcTimeline, FALSE);
-        return;
-    }
-
-    if (m_rcTimeline.PtInRect(point) && m_dragState == DRAG_NONE)
-    {
-        int hitClipIndex = HitTestTimelineClip(point);
-        if (hitClipIndex >= 0)
-        {
-            m_hoverClipIndex = hitClipIndex;
-            const TimelineClip& clip = m_timelineClips[hitClipIndex];
-
-            int clipStartX = SecondsToTimelineX(clip.startTimeOnTimeline);
-            int clipEndX = SecondsToTimelineX(clip.startTimeOnTimeline + clip.clipLengthSec);
-
-            double clipRatio = (double)(point.x - clipStartX) / (clipEndX - clipStartX);
-            clipRatio = max(0.0, min(1.0, clipRatio));
-
-            m_hoverTimePosition = clip.clipStartSec + (clipRatio * clip.clipLengthSec);
-            m_showSelectionBar = true;
-
-            if (hitClipIndex == m_activeTimelineClipIndex)
-            {
-                int hit = HitTestTimelineHandle(point);
-                if (hit == 2 || hit == 3)
-                    SetCursor(LoadCursor(NULL, IDC_SIZEWE));
-                else if (hit == 1)
-                    SetCursor(LoadCursor(NULL, IDC_SIZEALL));
-                else
-                    SetCursor(LoadCursor(NULL, IDC_IBEAM));
-            }
-            else
-            {
-                SetCursor(LoadCursor(NULL, IDC_IBEAM));
-            }
-
-            InvalidateRect(m_rcTimeline, FALSE);
-        }
-        else
-        {
-            if (m_showSelectionBar)
-            {
-                m_showSelectionBar = false;
-                m_hoverClipIndex = -1;
-                m_hoverTimePosition = -1.0;
-                InvalidateRect(m_rcTimeline, FALSE);
-            }
-            SetCursor(LoadCursor(NULL, IDC_ARROW));
-        }
-    }
-    else
-    {
-        if (m_showSelectionBar)
-        {
-            m_showSelectionBar = false;
-            m_hoverClipIndex = -1;
-            m_hoverTimePosition = -1.0;
-            InvalidateRect(m_rcTimeline, FALSE);
-        }
-    }
-}
-
-void NWPVideoEditorView::OnLButtonUp(UINT nFlags, CPoint point)
-{
-    if (m_bDragging)
-    {
-        if (GetCapture() == this) ReleaseCapture();
-        m_bDragging = FALSE;
-        if (m_pDragImage)
-        {
-            m_pDragImage->DragLeave(GetDesktopWindow());
-            m_pDragImage->EndDrag();
-            delete m_pDragImage;
-            m_pDragImage = nullptr;
-        }
-        CPoint ptScreen(point);
-        ClientToScreen(&ptScreen);
-        if (IsOverTimeline(ptScreen) && m_nDragIndex >= 0 && m_nDragIndex < (int)m_importedClips.size())
-        {
-            AddClipToTimeline(m_importedClips[m_nDragIndex].path);
-        }
-        m_nDragIndex = -1;
-        return;
-    }
-    if (m_dragState != DRAG_NONE)
-    {
-        if (GetCapture() == this) ReleaseCapture();
-        m_dragState = DRAG_NONE;
-        InvalidateRect(m_rcTimeline, FALSE);
-    }
-}
-
-void NWPVideoEditorView::OnDraw(CDC* pDC)
-{
-    DrawTimeline(pDC);
-    DrawPreviewFrame(pDC);
-}
-
-void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC)
-{
-    if (m_rcPreview.IsRectEmpty()) return;
-    pDC->FillSolidRect(m_rcPreview, RGB(20, 20, 20));
-    pDC->Draw3dRect(m_rcPreview, RGB(80, 80, 80), RGB(40, 40, 40));
-    CRect innerRect = m_rcPreview;
-    innerRect.DeflateRect(2, 2);
-    if (m_hPreviewBitmap)
-    {
-        CDC memDC;
-        memDC.CreateCompatibleDC(pDC);
-        HBITMAP oldBitmap = (HBITMAP)memDC.SelectObject(m_hPreviewBitmap);
-        BITMAP bmp;
-        GetObject(m_hPreviewBitmap, sizeof(BITMAP), &bmp);
-        pDC->StretchBlt(innerRect.left, innerRect.top, innerRect.Width(), innerRect.Height(),
-            &memDC, 0, 0, bmp.bmWidth, bmp.bmHeight, SRCCOPY);
-        memDC.SelectObject(oldBitmap);
-    }
-    else
-    {
-        pDC->FillSolidRect(innerRect, RGB(40, 40, 40));
-        pDC->SetTextColor(RGB(150, 150, 150));
-        pDC->SetBkMode(TRANSPARENT);
-        pDC->DrawText(_T("Loading frame..."), innerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    }
-    CRect infoRect = m_rcPreview;
-    infoRect.top = infoRect.bottom + 35;
-    infoRect.bottom = infoRect.top + 20;
-    if (!m_currentPreviewPath.IsEmpty())
-    {
-        CString filename = m_currentPreviewPath;
-        int lastSlash = filename.ReverseFind('\\');
-        if (lastSlash != -1) filename = filename.Mid(lastSlash + 1);
-        CString info;
-        info.Format(_T("%s @ %.2fs %s"), filename, m_previewTimePosition,
-            m_isPlaying ? _T("(Playing)") : _T(""));
-        pDC->SetTextColor(RGB(200, 200, 200));
-        pDC->SetBkMode(TRANSPARENT);
-        pDC->DrawText(info, infoRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    }
 }
 
 void NWPVideoEditorView::UpdatePreview()
@@ -1050,171 +1628,6 @@ void NWPVideoEditorView::ClearPreview()
     InvalidateRect(m_rcPreview, FALSE);
 }
 
-void NWPVideoEditorView::DrawTimeline(CDC* pDC)
-{
-    CRect r = m_rcTimeline;
-    pDC->FillSolidRect(r, RGB(28, 28, 28));
-    pDC->DrawEdge(r, EDGE_SUNKEN, BF_RECT);
-    pDC->SetTextColor(RGB(230, 230, 230));
-    pDC->TextOut(r.left + 10, r.top + 10, _T("Timeline"));
-
-    if (m_timelineClips.empty()) {
-        pDC->TextOut(r.left + 10, r.top + 30, _T("Double-click or drag clips above to place them on the timeline."));
-        return;
-    }
-
-    int top = r.top + 48;
-    int bottom = r.bottom - 36;
-
-    for (int i = 0; i < (int)m_timelineClips.size(); i++)
-    {
-        const TimelineClip& clip = m_timelineClips[i];
-        int clipStartX = SecondsToTimelineX(clip.startTimeOnTimeline);
-        int clipEndX = SecondsToTimelineX(clip.startTimeOnTimeline + clip.clipLengthSec);
-        CRect clipR(clipStartX, top, clipEndX, bottom);
-
-        COLORREF clipColor = (i == m_activeTimelineClipIndex) ? RGB(70, 120, 220) : RGB(90, 90, 120);
-        COLORREF borderColor = (i == m_activeTimelineClipIndex) ? RGB(30, 60, 140) : RGB(60, 60, 80);
-
-        pDC->FillSolidRect(clipR, clipColor);
-        pDC->FrameRect(clipR, &CBrush(borderColor));
-
-        if (m_showSelectionBar && m_hoverClipIndex == i)
-        {
-            double clipRatio = (m_hoverTimePosition - clip.clipStartSec) / clip.clipLengthSec;
-            clipRatio = max(0.0, min(1.0, clipRatio));
-            int selectionX = clipStartX + (int)(clipRatio * (clipEndX - clipStartX));
-
-            CPen selectionPen(PS_SOLID, 2, RGB(255, 255, 0));
-            CPen* oldPen = pDC->SelectObject(&selectionPen);
-            pDC->MoveTo(selectionX, clipR.top);
-            pDC->LineTo(selectionX, clipR.bottom);
-            pDC->SelectObject(oldPen);
-
-            CString timeText;
-            timeText.Format(_T("%.2fs"), m_hoverTimePosition);
-            CRect timeRect(selectionX - 30, clipR.top - 20, selectionX + 30, clipR.top - 2);
-            pDC->SetBkColor(RGB(255, 255, 0));
-            pDC->SetTextColor(RGB(0, 0, 0));
-            pDC->DrawText(timeText, timeRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        }
-
-        if (i == m_activeTimelineClipIndex)
-        {
-            CRect leftHandleR(clipR.left, clipR.top, clipR.left + 8, clipR.bottom);
-            pDC->FillSolidRect(leftHandleR, RGB(255, 160, 160));
-            CRect rightHandleR(clipR.right - 8, clipR.top, clipR.right, clipR.bottom);
-            pDC->FillSolidRect(rightHandleR, RGB(160, 200, 255));
-        }
-
-        CString clipText;
-        clipText.Format(_T("%.1fs"), clip.clipLengthSec);
-        CRect textR = clipR;
-        textR.DeflateRect(12, 2);
-        pDC->SetBkMode(TRANSPARENT);
-        pDC->SetTextColor(RGB(255, 255, 255));
-        pDC->DrawText(clipText, textR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    }
-
-    for (const auto& ov : m_overlays) {
-        int x1 = SecondsToTimelineX(ov.startSec);
-        int x2 = SecondsToTimelineX(ov.startSec + ov.durSec);
-        if (x2 > x1) {
-            CRect ovR(x1, r.bottom - 24, x2, r.bottom - 4);
-            pDC->FillSolidRect(ovR, RGB(255, 200, 100));
-            pDC->FrameRect(ovR, &CBrush(RGB(200, 160, 80)));
-            pDC->SetTextColor(RGB(0, 0, 0));
-            pDC->DrawText(ov.text, ovR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        }
-    }
-
-    if (m_activeTimelineClipIndex >= 0 && m_activeTimelineClipIndex < (int)m_timelineClips.size())
-    {
-        const TimelineClip& activeClip = m_timelineClips[m_activeTimelineClipIndex];
-        CString infoText;
-        infoText.Format(_T("Active Clip - Timeline Pos: %.1fs | Clip Start: %.1fs | Length: %.1fs"),
-            activeClip.startTimeOnTimeline, activeClip.clipStartSec, activeClip.clipLengthSec);
-        pDC->SetTextColor(RGB(200, 255, 200));
-        pDC->TextOut(r.left + 10, r.top + 30, infoText);
-    }
-}
-
-void NWPVideoEditorView::OnFileExport()
-{
-    if (m_timelineClips.empty()) {
-        AfxMessageBox(L"Add clips to the timeline first.");
-        return;
-    }
-
-    CFileDialog sfd(FALSE, L"mp4", L"output.mp4", OFN_OVERWRITEPROMPT,
-        L"MP4 video|*.mp4|All Files|*.*||");
-    sfd.m_ofn.lpstrDefExt = L"mp4";
-    if (sfd.DoModal() != IDOK) return;
-
-    CString out = sfd.GetPathName();
-    if (out.ReverseFind(L'.') < 0)
-        out += L".mp4";
-
-    // Sort clips by timeline position to ensure correct order
-    std::vector<TimelineClip> sortedClips = m_timelineClips;
-    std::sort(sortedClips.begin(), sortedClips.end(),
-        [](const TimelineClip& a, const TimelineClip& b) {
-            return a.startTimeOnTimeline < b.startTimeOnTimeline;
-        });
-
-    if (sortedClips.size() == 1)
-    {
-        // Single clip - simple export
-        const TimelineClip& clip = sortedClips[0];
-        CStringA inA(clip.path);
-        CStringA outA(out);
-        CStringA ff;
-        ff.Format("ffmpeg -y -ss %.3f -i \"%s\" -t %.3f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
-            clip.clipStartSec, inA.GetString(), clip.clipLengthSec, outA.GetString());
-
-        ExecuteFFmpegCommand(ff.GetString());
-    }
-    else
-    {
-        // Multiple clips - use concat filter
-        CStringA outA(out);
-        CStringA ff;
-
-        // Build input files part
-        ff = "ffmpeg -y";
-        for (const auto& clip : sortedClips)
-        {
-            CStringA pathA(clip.path);
-            CStringA input;
-            input.Format(" -ss %.3f -t %.3f -i \"%s\"",
-                clip.clipStartSec, clip.clipLengthSec, pathA.GetString());
-            ff += input;
-        }
-
-        // Build filter_complex part
-        CStringA filterComplex = " -filter_complex \"";
-        for (int i = 0; i < (int)sortedClips.size(); i++)
-        {
-            CStringA segment;
-            segment.Format("[%d:v:0][%d:a:0]", i, i);
-            filterComplex += segment;
-        }
-
-        CStringA concatFilter;
-        concatFilter.Format("concat=n=%d:v=1:a=1[outv][outa]\"", (int)sortedClips.size());
-        filterComplex += concatFilter;
-
-        // Complete command
-        ff += filterComplex;
-        ff += " -map \"[outv]\" -map \"[outa]\" -c:v libx264 -preset veryfast -crf 20 -c:a aac";
-        CStringA outputPart;
-        outputPart.Format(" \"%s\"", outA.GetString());
-        ff += outputPart;
-
-        ExecuteFFmpegCommand(ff.GetString());
-    }
-}
-
 void NWPVideoEditorView::ExecuteFFmpegCommand(const char* command)
 {
     std::string wrapper = std::string("cmd /C ") + command;
@@ -1235,7 +1648,6 @@ void NWPVideoEditorView::ExecuteFFmpegCommand(const char* command)
         return;
     }
 
-    // Show progress dialog
     AfxMessageBox(L"Exporting... This may take a while. Click OK to continue in background.");
 
     WaitForSingleObject(pi.hProcess, INFINITE);
@@ -1250,7 +1662,6 @@ void NWPVideoEditorView::ExecuteFFmpegCommand(const char* command)
         AfxMessageBox(L"Export failed. Check that all video files are accessible.");
 }
 
-
 void NWPVideoEditorView::OnFileSave()
 {
     OnFileExport();
@@ -1258,15 +1669,7 @@ void NWPVideoEditorView::OnFileSave()
 
 void NWPVideoEditorView::OnEditAddText()
 {
-    CString text = L"Sample Text";
-    if (AfxMessageBox(L"Add text overlay?", MB_YESNO) == IDYES) {
-        OverlayItem ov;
-        ov.text = text;
-        ov.startSec = 2.0;
-        ov.durSec = 3.0;
-        m_overlays.push_back(ov);
-        InvalidateRect(m_rcTimeline, FALSE);
-    }
+    OnAddText();
 }
 
 BOOL NWPVideoEditorView::OnPreparePrinting(CPrintInfo* pInfo)

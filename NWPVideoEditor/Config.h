@@ -29,7 +29,6 @@ public:
     const RenderProfile* GetProfile(const std::string& name) const;
     const std::vector<std::wstring>& DefaultArgs() const;
 
-    // FIXED - No more std::optional!
     static bool LoadFromFile(const std::wstring& path, EditorConfig& config);
 
 private:

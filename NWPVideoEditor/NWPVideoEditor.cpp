@@ -24,8 +24,6 @@ BEGIN_MESSAGE_MAP(CNWPVideoEditorApp, CWinAppEx)
 	// Standard file based document commands
 	ON_COMMAND(ID_FILE_NEW, &CWinAppEx::OnFileNew)
 	ON_COMMAND(ID_FILE_OPEN, &CWinAppEx::OnFileOpen)
-	// Standard print setup command
-	ON_COMMAND(ID_FILE_PRINT_SETUP, &CWinAppEx::OnFilePrintSetup)
 END_MESSAGE_MAP()
 
 
@@ -75,7 +73,7 @@ BOOL CNWPVideoEditorApp::InitInstance()
 	EnableTaskbarInteraction(FALSE);
 
 	SetRegistryKey(_T("Local AppWizard-Generated Applications"));
-	LoadStdProfileSettings(4);  // Load standard INI file options (including MRU)
+	LoadStdProfileSettings(4);
 
 
 	InitContextMenuManager();

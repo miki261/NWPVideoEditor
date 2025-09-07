@@ -8,7 +8,7 @@
 
 class CNWPVideoEditorDoc : public CDocument
 {
-protected: // create from serialization only
+protected:
 	CNWPVideoEditorDoc() noexcept;
 	DECLARE_DYNCREATE(CNWPVideoEditorDoc)
 
@@ -35,9 +35,6 @@ public:
 	virtual void Dump(CDumpContext& dc) const;
 #endif
 
-protected:
-
-// Generated message map functions
 protected:
 	DECLARE_MESSAGE_MAP()
 

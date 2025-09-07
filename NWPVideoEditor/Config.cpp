@@ -15,9 +15,7 @@ static std::wstring ExpandEnvVars(const std::wstring& in) {
 EditorConfig::EditorConfig() {}
 EditorConfig::~EditorConfig() {}
 
-// FIXED - No JSON, no std::optional
 bool EditorConfig::LoadFromFile(const std::wstring& path, EditorConfig& config) {
-    // Set default values without JSON parsing
     config.m_binDir = ExpandEnvVars(L"%ProgramFiles%\\ffmpeg\\bin");
     config.m_ffmpegExe = L"ffmpeg.exe";
     config.m_ffprobeExe = L"ffprobe.exe";

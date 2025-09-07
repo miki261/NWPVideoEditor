@@ -84,6 +84,8 @@
 #define IDS_FIND_TAB                    302
 #define IDS_EXPLORER                    305
 #define IDS_EDIT_MENU                   306
+#define IDD_TEXT_INPUT_DIALOG           307
+#define IDC_TEXT_INPUT_EDIT             308
 #define IDR_MENU1                       310
 #define ID_FILE_IMPORT                  32811
 #define ID_FILE_EXPORT                  32812
@@ -92,8 +94,7 @@
 #define ID_TIMELINE_SPLIT_CLIP			32815
 #define ID_PLAY_PAUSE_BUTTON            32816
 #define ID_STOP_BUTTON                  32817
-
-
+#define ID_ADD_TEXT_BUTTON              32818
 
 #ifndef IDI_CLASS_FOLDER_CLOSED  
 #define IDI_CLASS_FOLDER_CLOSED     3001
@@ -129,7 +130,6 @@
 #define IDR_POPUP_CLASSVIEW         3011
 #endif
 
-// 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        311

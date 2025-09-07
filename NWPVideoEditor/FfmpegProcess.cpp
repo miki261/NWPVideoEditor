@@ -48,13 +48,12 @@ ExecResult FfmpegProcess::Run(const std::wstring& exePath, const std::vector<std
     PROCESS_INFORMATION pi{};
     std::wstring cmd = JoinCmd(exePath, args);
 
-    // FIXED - Create mutable copy for CreateProcessW
     std::vector<wchar_t> mutableCmd(cmd.begin(), cmd.end());
     mutableCmd.push_back(L'\0');
 
     BOOL ok = CreateProcessW(
         nullptr,
-        mutableCmd.data(),  // FIXED - Use wchar_t* instead of wstring.data()
+        mutableCmd.data(),
         nullptr,
         nullptr,
         TRUE,
@@ -80,7 +79,6 @@ ExecResult FfmpegProcess::Run(const std::wstring& exePath, const std::vector<std
         BYTE  buf[4096];
         DWORD read = 0;
 
-        // Read stdout
         for (;;)
         {
             if (!ReadFile(outRd, buf, sizeof(buf), &read, nullptr) || read == 0)
