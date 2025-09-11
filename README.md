@@ -11,7 +11,6 @@ A simple MFC-based video utility demonstrating:
 - Windows 10/11
 - Visual Studio 2022 (v143 toolset)
 - Windows 10 SDK (10.0.x)
-- FFmpeg in system PATH for video export
 
 ## Build
 Open `NWPVideoEditor.sln` in Visual Studio.
@@ -26,10 +25,7 @@ Build configurations supported:
 3) Drag the edges to change the length of the video.
 4) (Optional) Click “Add Text” to add a sample overlay; multiple overlays are supported.
 5) File > Save to render using ffmpeg.
-
-## Notes
-- If ffmpeg is not in PATH, export will fail.
-- 
+6) 
 ## What this version does
 - Displays imported video files as large icons in the main list view (MP4, MOV, MKV, AVI video formats supported).
 - Visual timeline shows clips as blue bars, text overlays as orange bars.
