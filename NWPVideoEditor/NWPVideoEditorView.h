@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include <vector>
-#include "afxcmn.h"
+#include <afxcmn.h>
 #include "TextInputDialog.h"
 
 struct ClipItem {
@@ -32,7 +32,11 @@ struct TextOverlay {
     }
 };
 
-struct OverlayItem { CString text; double startSec; double durSec; };
+struct OverlayItem {
+    CString text;
+    double startSec;
+    double durSec;
+};
 
 class CNWPVideoEditorDoc;
 
@@ -53,6 +57,14 @@ public:
     HBITMAP     m_hPreviewBitmap;
     CString     m_currentPreviewPath;
     double      m_previewTimePosition;
+
+    // Native video size and preview mapping
+    int m_videoWidth = 480;
+    int m_videoHeight = 360;
+    double m_prevScaleX = 1.0;
+    double m_prevScaleY = 1.0;
+    int m_prevOffX = 0;
+    int m_prevOffY = 0;
 
     std::vector<TimelineClip> m_timelineClips;
     int m_activeTimelineClipIndex = -1;
@@ -109,11 +121,6 @@ public:
     virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
 
 protected:
-    virtual BOOL OnPreparePrinting(CPrintInfo* pInfo);
-    virtual void OnBeginPrinting(CDC* pDC, CPrintInfo* pInfo);
-    virtual void OnEndPrinting(CDC* pDC, CPrintInfo* pInfo);
-
-public:
     virtual ~NWPVideoEditorView();
 #ifdef _DEBUG
     virtual void AssertValid() const;
@@ -162,10 +169,10 @@ private:
     int  HitTestTimelineTextOverlay(CPoint pt) const;
     int  HitTestTextOverlayHandles(CPoint pt) const;
     int  HitTestTextOverlayInPreview(CPoint pt) const;
-    CStringA BuildTextOverlayFilter() const;
+    CString BuildTextOverlayFilter() const;
     double TimelineXToSeconds(int x) const;
     int SecondsToTimelineX(double seconds) const;
-    double GetVideoDuration(const CString& filePath);
+    double GetVideoDurationAndSize(const CString& filePath, int& outW, int& outH);
     void RepositionClipsAfterRemoval();
     BOOL IsOverTimeline(CPoint screenPt);
     void AddClipToTimeline(const CString& clipPath);
@@ -173,7 +180,9 @@ private:
     void StopPlayback();
     void UpdatePlaybackFrame();
     double GetCurrentClipDuration();
-    void ExecuteFFmpegCommand(const char* command);
+    void ExecuteFFmpegCommand(const CString& command);
+    static BOOL RunProcessAndWait(const CString& cmdLine, DWORD waitMS, DWORD* pExit = nullptr);
+
 };
 
 #ifndef _DEBUG

@@ -16,16 +16,14 @@ EditorConfig::EditorConfig() {}
 EditorConfig::~EditorConfig() {}
 
 bool EditorConfig::LoadFromFile(const std::wstring& path, EditorConfig& config) {
-    config.m_binDir = ExpandEnvVars(L"%ProgramFiles%\\ffmpeg\\bin");
     config.m_ffmpegExe = L"ffmpeg.exe";
     config.m_ffprobeExe = L"ffprobe.exe";
-    config.m_tempDir = ExpandEnvVars(L"%TEMP%");
+    config.m_tempDir.clear();
 
     config.m_defaultArgs.clear();
     config.m_defaultArgs.push_back(L"-y");
     config.m_defaultArgs.push_back(L"-hide_banner");
 
-    // Add default profile
     RenderProfile defaultProfile;
     defaultProfile.container = "mp4";
     defaultProfile.videoCodec = "libx264";
@@ -42,8 +40,6 @@ bool EditorConfig::LoadFromFile(const std::wstring& path, EditorConfig& config) 
     return true;
 }
 
-std::wstring EditorConfig::FfmpegExePath() const { return m_binDir + L"\\" + m_ffmpegExe; }
-std::wstring EditorConfig::FfprobeExePath() const { return m_binDir + L"\\" + m_ffprobeExe; }
 const std::vector<std::wstring>& EditorConfig::DefaultArgs() const { return m_defaultArgs; }
 const RenderProfile* EditorConfig::GetProfile(const std::string& name) const {
     auto it = m_profiles.find(name);
