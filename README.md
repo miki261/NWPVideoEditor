@@ -20,12 +20,13 @@ Build configurations supported:
 - Debug x64, Release x64
 
 ## Run
-1) Download FFMpeg from https://ffmpeg.org/ (You need ffmpeg.exe and ffprobe.exe from the bin folder)
-2) File > Open and select a media file (mp4/mov/mkv/avi/mp3/wav).
-3) Double-click / drag-drop the imported tile to place it on the timeline.
-4) Drag the edges to change the length of the video.
-5) (Optional) Click “Add Text” to add a sample overlay; multiple overlays are supported.
-6) File > Save to render using ffmpeg.
+1) Download FFmpeg from https://ffmpeg.org/ (You need ffmpeg.exe and ffprobe.exe from the bin folder).
+2) Click Load FFmpeg inside the app and locate your ffmpeg folder. 
+3) File > Open and select a media file (mp4/mov/mkv/avi/mp3/wav).
+4) Double-click / drag-drop the imported tile to place it on the timeline.
+5) Drag the edges to change the length of the video.
+6) (Optional) Click “Add Text” to add a sample overlay; multiple overlays are supported.
+7) File > Save to render using ffmpeg.
    
 ## What this version does
 - Displays imported video files as large icons in the main list view (MP4, MOV, MKV, AVI video formats supported).
