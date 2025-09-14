@@ -27,17 +27,25 @@ public:
     const RenderProfile* GetProfile(const std::string& name) const;
     const std::vector<std::wstring>& DefaultArgs() const;
 
-    // Add public getters for the paths
-    const std::wstring& GetFFmpegExePath() const { return m_ffmpegExe; }
-    const std::wstring& GetFFprobeExePath() const { return m_ffprobeExe; }
+    // Path getters - return full paths or empty if not configured
+    const std::wstring& GetFFmpegExePath() const { return m_ffmpegPath; }
+    const std::wstring& GetFFprobeExePath() const { return m_ffprobePath; }
     const std::wstring& GetTempDir() const { return m_tempDir; }
+    const std::wstring& GetFFmpegFolder() const { return m_ffmpegFolder; }
+
+    // FFmpeg folder methods
+    void SetFFmpegFolder(const std::wstring& folderPath);
+    bool IsFFmpegConfigured() const;
 
     static bool LoadFromFile(const std::wstring& path, EditorConfig& config);
 
 private:
-    std::wstring m_ffmpegExe;
-    std::wstring m_ffprobeExe;
+    std::wstring m_ffmpegFolder;    // Base folder
+    std::wstring m_ffmpegPath;      // Full path to ffmpeg.exe
+    std::wstring m_ffprobePath;     // Full path to ffprobe.exe
     std::wstring m_tempDir;
     std::vector<std::wstring> m_defaultArgs;
     std::unordered_map<std::string, RenderProfile> m_profiles;
+
+    void UpdateExecutablePaths();
 };

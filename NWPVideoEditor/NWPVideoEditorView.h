@@ -111,6 +111,7 @@ public:
     CButton m_playPauseButton;
     CButton m_stopButton;
     CButton m_addTextButton;
+    CButton m_loadFFmpegButton;
     bool m_isPlaying = false;
     UINT_PTR m_playbackTimer = 0;
     double m_playbackStartTime = 0.0;
@@ -149,6 +150,7 @@ protected:
     afx_msg void OnPlayPause();
     afx_msg void OnStop();
     afx_msg void OnTimer(UINT_PTR nIDEvent);
+    afx_msg void OnLoadFFmpegFolder();
     DECLARE_MESSAGE_MAP()
 
 private:
@@ -182,7 +184,6 @@ private:
     double GetCurrentClipDuration();
     void ExecuteFFmpegCommand(const CString& command);
     static BOOL RunProcessAndWait(const CString& cmdLine, DWORD waitMS, DWORD* pExit = nullptr);
-
 };
 
 #ifndef _DEBUG
