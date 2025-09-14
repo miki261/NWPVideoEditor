@@ -99,8 +99,8 @@ int NWPVideoEditorView::OnCreate(LPCREATESTRUCT cs) {
     if (!m_addTextButton.Create(strText, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         CRect(0, 0, 70, 25), this, ID_ADD_TEXT_BUTTON))
         return -1;
-
-    if (!m_loadFFmpegButton.Create(L"Load FFmpeg", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    strText.LoadString(IDS_BTN_LOAD_FFMPEG);
+    if (!m_loadFFmpegButton.Create(strText, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         CRect(0, 0, 100, 25), this, ID_LOAD_FFMPEG_BUTTON))
         return -1;
 
@@ -155,7 +155,9 @@ void NWPVideoEditorView::OnLoadFFmpegFolder()
 {
     BROWSEINFO bi = { 0 };
     bi.hwndOwner = GetSafeHwnd();
-    bi.lpszTitle = L"Select FFmpeg Folder (containing ffmpeg.exe and ffprobe.exe)";
+    CString strText;
+    strText.LoadString(IDS_BTN_LOAD_FFMPEG);
+    bi.lpszTitle = strText;
     bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
 
     LPITEMIDLIST pidl = SHBrowseForFolder(&bi);

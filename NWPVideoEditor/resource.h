@@ -139,7 +139,8 @@
 #define ID_STOP_BUTTON                  32817
 #define ID_ADD_TEXT_BUTTON              32818
 #define ID_LOAD_FFMPEG_BUTTON           32819
-#define IDS_BTN_LOAD_FFMPEG            32820
+#define IDS_BTN_LOAD_FFMPEG				32820
+#define IDS_FFMPEG_FOLDER				32821
 
 #ifndef IDI_CLASS_FOLDER_CLOSED  
 #define IDI_CLASS_FOLDER_CLOSED     3001
