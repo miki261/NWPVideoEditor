@@ -87,7 +87,6 @@
 #define IDD_TEXT_INPUT_DIALOG           307
 #define IDC_TEXT_INPUT_EDIT             308
 #define IDR_MENU1                       310
-
 // Missing string IDs from error messages
 #define IDS_MSG_TEXT_DELETED            400
 #define IDS_MSG_TEXT_ADDED              401
@@ -107,7 +106,6 @@
 #define IDS_CANCEL                      415
 #define IDS_ENTER_TEXT                  416
 #define IDS_ADD_TEXT_OVERLAY_TITLE      417
-
 // Timeline and UI message IDs
 #define IDS_LBL_TIME_FORMAT             420
 #define IDS_LBL_PLAYING                 421
@@ -117,18 +115,15 @@
 #define IDS_BTN_PAUSE                   425
 #define IDS_BTN_STOP                    426
 #define IDS_BTN_ADD_TEXT                427
-
 // Menu string IDs  
 #define IDS_MENU_SPLIT_AT               430
 #define IDS_MENU_SPLIT                  431
 #define IDS_MENU_REMOVE_FROM_TIMELINE   432
 #define IDS_MENU_DELETE                 433
-
 // File filter string IDs
 #define IDS_FILE_FILTER_MEDIA           440
 #define IDS_FILE_FILTER_MP4             441
 #define IDS_FILE_FILTER_ALL             442
-
 // Command IDs
 #define ID_FILE_IMPORT                  32811
 #define ID_FILE_EXPORT                  32812
@@ -139,8 +134,10 @@
 #define ID_STOP_BUTTON                  32817
 #define ID_ADD_TEXT_BUTTON              32818
 #define ID_LOAD_FFMPEG_BUTTON           32819
-#define IDS_BTN_LOAD_FFMPEG				32820
-#define IDS_FFMPEG_FOLDER				32821
+#define IDS_BTN_LOAD_FFMPEG             32820
+#define IDS_FFMPEG_FOLDER               32821
+#define IDM_SETTINGS_MENU               32822
+#define ID_SETTINGS_LOAD_FFMPEG         32823
 
 #ifndef IDI_CLASS_FOLDER_CLOSED  
 #define IDI_CLASS_FOLDER_CLOSED     3001
@@ -175,11 +172,10 @@
 #ifndef IDR_POPUP_CLASSVIEW  
 #define IDR_POPUP_CLASSVIEW         3011
 #endif
-
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        500
-#define _APS_NEXT_COMMAND_VALUE         32820
+#define _APS_NEXT_COMMAND_VALUE         32824
 #define _APS_NEXT_CONTROL_VALUE         1000
 #define _APS_NEXT_SYMED_VALUE           310
 #endif

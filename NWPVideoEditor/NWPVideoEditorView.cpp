@@ -40,7 +40,7 @@ BEGIN_MESSAGE_MAP(NWPVideoEditorView, CView)
     ON_COMMAND(32775, &NWPVideoEditorView::OnDeleteTextOverlay)
     ON_BN_CLICKED(ID_PLAY_PAUSE_BUTTON, &NWPVideoEditorView::OnPlayPause)
     ON_BN_CLICKED(ID_STOP_BUTTON, &NWPVideoEditorView::OnStop)
-    ON_BN_CLICKED(ID_LOAD_FFMPEG_BUTTON, &NWPVideoEditorView::OnLoadFFmpegFolder)  // NEW
+    ON_COMMAND(ID_SETTINGS_LOAD_FFMPEG, &NWPVideoEditorView::OnLoadFFmpegFolder)
     ON_WM_TIMER()
 END_MESSAGE_MAP()
 
@@ -99,10 +99,6 @@ int NWPVideoEditorView::OnCreate(LPCREATESTRUCT cs) {
     if (!m_addTextButton.Create(strText, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         CRect(0, 0, 70, 25), this, ID_ADD_TEXT_BUTTON))
         return -1;
-    strText.LoadString(IDS_BTN_LOAD_FFMPEG);
-    if (!m_loadFFmpegButton.Create(strText, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        CRect(0, 0, 100, 25), this, ID_LOAD_FFMPEG_BUTTON))
-        return -1;
 
     return 0;
 }
@@ -144,7 +140,6 @@ void NWPVideoEditorView::Layout(int cx, int cy) {
         m_addTextButton.MoveWindow(previewX + (buttonW + buttonSpacing) * 2, buttonY, addTextButtonW, buttonH);
 
         int loadFFmpegX = previewX + previewW - loadFFmpegButtonW;
-        m_loadFFmpegButton.MoveWindow(loadFFmpegX, buttonY, loadFFmpegButtonW, buttonH);
     }
 
     m_rcTimeline = CRect(margin, cy - timelineH, cx - margin, cy - margin);
@@ -155,40 +150,33 @@ void NWPVideoEditorView::OnLoadFFmpegFolder()
 {
     BROWSEINFO bi = { 0 };
     bi.hwndOwner = GetSafeHwnd();
-    CString strText;
-    strText.LoadString(IDS_BTN_LOAD_FFMPEG);
-    bi.lpszTitle = strText;
+    bi.lpszTitle = L"Select FFmpeg Folder (containing ffmpeg.exe and ffprobe.exe)";
     bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
 
     LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
     if (pidl != nullptr) {
         wchar_t folderPath[MAX_PATH];
         if (SHGetPathFromIDList(pidl, folderPath)) {
-            CString ffmpegPath, ffprobePath;
-            ffmpegPath.Format(L"%s\\ffmpeg.exe", folderPath);
-            ffprobePath.Format(L"%s\\ffprobe.exe", folderPath);
+            // This actually sets the paths that will be used everywhere
+            m_config.SetFFmpegFolder(folderPath);
 
-            if (PathFileExistsW(ffmpegPath) && PathFileExistsW(ffprobePath)) {
+            if (m_config.IsFFmpegConfigured()) {
                 CString message;
-                message.Format(L"✓ FFmpeg found!\n\nFolder: %s\n\nFound:\n• %s\n• %s",
-                    folderPath, ffmpegPath.GetString(), ffprobePath.GetString());
+                message.Format(L"✓ FFmpeg successfully configured!\n\nFolder: %s\n\nFound:\n• %s\n• %s",
+                    folderPath,
+                    m_config.GetFFmpegExePath().c_str(),
+                    m_config.GetFFprobeExePath().c_str());
                 AfxMessageBox(message, MB_OK | MB_ICONINFORMATION);
             }
             else {
                 CString message;
-                message.Format(L"❌ FFmpeg not found in:\n%s\n\nPlease select a folder containing ffmpeg.exe and ffprobe.exe",
-                    folderPath);
+                message.Format(L"❌ Invalid FFmpeg folder!\n\nFolder does not contain ffmpeg.exe and ffprobe.exe:\n%s", folderPath);
                 AfxMessageBox(message, MB_OK | MB_ICONWARNING);
             }
         }
         CoTaskMemFree(pidl);
     }
 }
-
-
-
-
-
 
 
 int NWPVideoEditorView::AddShellIconForFile(const CString& path) {
@@ -268,6 +256,12 @@ void NWPVideoEditorView::OnFileSave() {
 }
 
 void NWPVideoEditorView::OnFileExport() {
+    // Check if FFmpeg is configured first
+    if (!m_config.IsFFmpegConfigured()) {
+        AfxMessageBox(L"FFmpeg is not configured!\n\nClick 'Load FFmpeg' button and select your FFmpeg folder before exporting.", MB_OK | MB_ICONWARNING);
+        return;
+    }
+
     if (m_timelineClips.empty()) {
         CString message;
         message.LoadString(IDS_MSG_ADD_CLIPS_FIRST);
@@ -284,7 +278,6 @@ void NWPVideoEditorView::OnFileExport() {
     CString out = sfd.GetPathName();
     if (out.ReverseFind(L'.') <= 0) out += L".mp4";
 
-    // Sort clips by timeline position
     std::vector<TimelineClip> sortedClips = m_timelineClips;
     std::sort(sortedClips.begin(), sortedClips.end(),
         [](const TimelineClip& a, const TimelineClip& b) {
@@ -293,22 +286,25 @@ void NWPVideoEditorView::OnFileExport() {
 
     CString textFilter = BuildTextOverlayFilter();
 
+    // Use the configured FFmpeg path directly
+    CString ffmpegPath = m_config.GetFFmpegExePath().c_str();
+
     if (sortedClips.size() == 1) {
         const TimelineClip& clip = sortedClips[0];
         CString ff;
         if (!textFilter.IsEmpty()) {
-            ff.Format(L"cmd /C ffmpeg -y -ss %.3f -i \"%s\" -t %.3f -vf %s -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
-                clip.clipStartSec, clip.path.GetString(), clip.clipLengthSec, textFilter.GetString(), out.GetString());
+            ff.Format(L"\"%s\" -y -ss %.3f -i \"%s\" -t %.3f -vf %s -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
+                ffmpegPath.GetString(), clip.clipStartSec, clip.path.GetString(), clip.clipLengthSec, textFilter.GetString(), out.GetString());
         }
         else {
-            ff.Format(L"cmd /C ffmpeg -y -ss %.3f -i \"%s\" -t %.3f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
-                clip.clipStartSec, clip.path.GetString(), clip.clipLengthSec, out.GetString());
+            ff.Format(L"\"%s\" -y -ss %.3f -i \"%s\" -t %.3f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
+                ffmpegPath.GetString(), clip.clipStartSec, clip.path.GetString(), clip.clipLengthSec, out.GetString());
         }
         ExecuteFFmpegCommand(ff);
     }
     else {
-        // Multi-clip concatenation with filter_complex
-        CString ff(L"cmd /C ffmpeg -y");
+        CString ff;
+        ff.Format(L"\"%s\" -y", ffmpegPath.GetString());
 
         for (size_t i = 0; i < sortedClips.size(); i++) {
             CString part;
@@ -348,6 +344,8 @@ void NWPVideoEditorView::OnFileExport() {
         ExecuteFFmpegCommand(ff);
     }
 }
+
+
 
 void NWPVideoEditorView::ExecuteFFmpegCommand(const CString& command) {
     CString run = command;
@@ -568,21 +566,27 @@ void NWPVideoEditorView::DrawTextOverlays(CDC* pDC) {
     for (int i = 0; i < static_cast<int>(m_textOverlays.size()); i++) {
         const TextOverlay& overlay = m_textOverlays[i];
 
-        // Check if text should be visible at current time
         if (m_previewTimePosition < overlay.startSec ||
             m_previewTimePosition > overlay.startSec + overlay.durSec) {
             continue;
         }
 
         CFont font;
-        font.CreateFont(overlay.fontSize, 0, 0, 0, FW_BOLD, FALSE, FALSE, 0, ANSI_CHARSET,
+        int scaledFontSize = static_cast<int>(overlay.fontSize * m_prevScaleX);
+        if (scaledFontSize < 8) scaledFontSize = 8;  // Minimum readable size
+
+        font.CreateFont(scaledFontSize, 0, 0, 0, FW_BOLD, FALSE, FALSE, 0, ANSI_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
             DEFAULT_PITCH | FF_SWISS, overlay.fontName);
 
         CFont* oldFont = pDC->SelectObject(&font);
         pDC->SetBkMode(TRANSPARENT);
 
-        CPoint textPos(previewInner.left + overlay.position.x, previewInner.top + overlay.position.y);
+        // Calculate text position with proper scaling and offset
+        int textX = previewInner.left + m_prevOffX + static_cast<int>(overlay.position.x * m_prevScaleX);
+        int textY = previewInner.top + m_prevOffY + static_cast<int>(overlay.position.y * m_prevScaleY);
+
+        CPoint textPos(textX, textY);
 
         // Drop shadow
         pDC->SetTextColor(RGB(0, 0, 0));
@@ -595,6 +599,7 @@ void NWPVideoEditorView::DrawTextOverlays(CDC* pDC) {
         pDC->SelectObject(oldFont);
     }
 }
+
 
 
 CString NWPVideoEditorView::BuildTextOverlayFilter() const {
@@ -1152,16 +1157,24 @@ double NWPVideoEditorView::GetVideoDurationAndSize(const CString& filePath, int&
     outW = 480;
     outH = 360;
 
-    // Use ffprobe to get video dimensions and duration
+    // If FFmpeg not configured, return default values
+    if (!m_config.IsFFmpegConfigured()) {
+        return 30.0;
+    }
+
     wchar_t tmpPath[MAX_PATH];
     GetTempPathW(MAX_PATH, tmpPath);
 
+    // Use the configured FFprobe path directly
+    CString ffprobePath = m_config.GetFFprobeExePath().c_str();
+
+    // Get width and height
     CString whOut;
     whOut.Format(L"%sffprobe_wh_%llu.txt", tmpPath, static_cast<unsigned long long>(GetTickCount()));
 
     CString cmdWH;
-    cmdWH.Format(L"cmd /C ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of default=nw=1 \"%s\" > \"%s\" 2>&1",
-        filePath.GetString(), whOut.GetString());
+    cmdWH.Format(L"cmd /C \"%s\" -v error -select_streams v:0 -show_entries stream=width,height -of default=nw=1 \"%s\" > \"%s\" 2>&1",
+        ffprobePath.GetString(), filePath.GetString(), whOut.GetString());
 
     DWORD exitWH = 0;
     RunProcessAndWait(cmdWH, 7000, &exitWH);
@@ -1184,13 +1197,13 @@ double NWPVideoEditorView::GetVideoDurationAndSize(const CString& filePath, int&
     durOut.Format(L"%sffprobe_dur_%llu.txt", tmpPath, static_cast<unsigned long long>(GetTickCount()));
 
     CString cmdDur;
-    cmdDur.Format(L"cmd /C ffprobe -v error -select_streams v:0 -show_entries format=duration -of default=nw=1:nk=1 \"%s\" > \"%s\" 2>&1",
-        filePath.GetString(), durOut.GetString());
+    cmdDur.Format(L"cmd /C \"%s\" -v error -select_streams v:0 -show_entries format=duration -of default=nw=1:nk=1 \"%s\" > \"%s\" 2>&1",
+        ffprobePath.GetString(), filePath.GetString(), durOut.GetString());
 
     DWORD exitDur = 0;
     RunProcessAndWait(cmdDur, 7000, &exitDur);
 
-    double duration = 30.0; // default
+    double duration = 30.0;
     if (f.Open(durOut, CFile::modeRead | CFile::typeText)) {
         CString s;
         if (f.ReadString(s)) {
@@ -1203,9 +1216,6 @@ double NWPVideoEditorView::GetVideoDurationAndSize(const CString& filePath, int&
 
     return duration;
 }
-
-
-
 
 
 void NWPVideoEditorView::AddClipToTimeline(const CString& clipPath) {
@@ -1491,19 +1501,23 @@ void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC) {
     int vidW = max(1, m_videoWidth);
     int vidH = max(1, m_videoHeight);
 
-    double sx = static_cast<double>(boxW) / vidW;
-    double sy = static_cast<double>(boxH) / vidH;
-    double s = (sx < sy) ? sx : sy;
+    // Calculate scaling to fit video in preview box while maintaining aspect ratio
+    double scaleX = static_cast<double>(boxW) / vidW;
+    double scaleY = static_cast<double>(boxH) / vidH;
+    double scale = min(scaleX, scaleY);  // Use smaller scale to fit entirely
 
-    int drawW = iround(vidW * s);
-    int drawH = iround(vidH * s);
+    int drawW = static_cast<int>(vidW * scale);
+    int drawH = static_cast<int>(vidH * scale);
 
+    // Center the video in the preview box
     int dstL = innerRect.left + (boxW - drawW) / 2;
     int dstT = innerRect.top + (boxH - drawH) / 2;
 
-    m_prevScaleX = m_prevScaleY = (s > 0.0) ? s : 1.0;
-    m_prevOffX = dstL - innerRect.left;
-    m_prevOffY = dstT - innerRect.top;
+    // Store scaling info for text overlay positioning
+    m_prevScaleX = scale;
+    m_prevScaleY = scale;
+    m_prevOffX = (boxW - drawW) / 2;
+    m_prevOffY = (boxH - drawH) / 2;
 
     if (m_hPreviewBitmap) {
         CDC memDC;
@@ -1513,12 +1527,19 @@ void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC) {
         BITMAP bmp;
         GetObject(m_hPreviewBitmap, sizeof(BITMAP), &bmp);
 
-        // Fill black bars
-        pDC->FillSolidRect(innerRect.left, innerRect.top, boxW, m_prevOffY, RGB(20, 20, 20));
-        pDC->FillSolidRect(innerRect.left, innerRect.top + m_prevOffY + drawH, boxW, boxH - m_prevOffY - drawH, RGB(20, 20, 20));
-        pDC->FillSolidRect(innerRect.left, innerRect.top + m_prevOffY, m_prevOffX, drawH, RGB(20, 20, 20));
-        pDC->FillSolidRect(innerRect.left + m_prevOffX + drawW, innerRect.top + m_prevOffY, boxW - m_prevOffX - drawW, drawH, RGB(20, 20, 20));
+        // Fill black bars around the video
+        if (m_prevOffY > 0) {
+            // Top and bottom bars
+            pDC->FillSolidRect(innerRect.left, innerRect.top, boxW, m_prevOffY, RGB(0, 0, 0));
+            pDC->FillSolidRect(innerRect.left, dstT + drawH, boxW, boxH - m_prevOffY - drawH, RGB(0, 0, 0));
+        }
+        if (m_prevOffX > 0) {
+            // Left and right bars
+            pDC->FillSolidRect(innerRect.left, innerRect.top, m_prevOffX, boxH, RGB(0, 0, 0));
+            pDC->FillSolidRect(dstL + drawW, innerRect.top, boxW - m_prevOffX - drawW, boxH, RGB(0, 0, 0));
+        }
 
+        // Draw the scaled video frame
         pDC->StretchBlt(dstL, dstT, drawW, drawH, &memDC, 0, 0, bmp.bmWidth, bmp.bmHeight, SRCCOPY);
         memDC.SelectObject(oldBitmap);
     }
@@ -1528,8 +1549,13 @@ void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC) {
         pDC->SetBkMode(TRANSPARENT);
 
         CString loadingText;
-        loadingText.LoadString(IDS_LBL_LOADING_FRAME);
-        pDC->DrawText(loadingText, &innerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (!m_config.IsFFmpegConfigured()) {
+            loadingText = L"FFmpeg not configured\nClick Settings > Load FFmpeg";
+        }
+        else {
+            loadingText.LoadString(IDS_LBL_LOADING_FRAME);
+        }
+        pDC->DrawText(loadingText, &innerRect, DT_CENTER | DT_VCENTER | DT_WORDBREAK);
     }
 
     DrawTextOverlays(pDC);
@@ -1558,6 +1584,7 @@ void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC) {
     }
 }
 
+
 void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePosition) {
     m_currentPreviewPath = filePath;
 
@@ -1566,23 +1593,30 @@ void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePo
         m_hPreviewBitmap = nullptr;
     }
 
+    // If FFmpeg not configured, show test frame
+    if (!m_config.IsFFmpegConfigured()) {
+        CreateTestFrame(filePath, timePosition);
+        InvalidateRect(&m_rcPreview, FALSE);
+        return;
+    }
+
     wchar_t tempPath[MAX_PATH];
     GetTempPathW(MAX_PATH, tempPath);
 
     CString tempImagePath;
     tempImagePath.Format(L"%stemp_frame_%llu.bmp", tempPath, static_cast<unsigned long long>(GetTickCount()));
 
+    // Use the configured FFmpeg path directly
+    CString ffmpegPath = m_config.GetFFmpegExePath().c_str();
+
     CString ff;
-    ff.Format(L"cmd /C ffmpeg -y -ss %.3f -i \"%s\" -vframes 1 "
-        L"-vf \"scale=in_color_matrix=bt709:out_color_matrix=bt709\" "
-        L"-colorspace bt709 -color_primaries bt709 -color_trc iec61966-2-1 "
-        L"-src_range 1 -dst_range 1 \"%s\" > nul 2>&1",
-        max(0.0, timePosition), filePath.GetString(), tempImagePath.GetString());
+    ff.Format(L"\"%s\" -y -ss %.3f -i \"%s\" -vframes 1 -vf \"scale=in_color_matrix=bt709:out_color_matrix=bt709\" -colorspace bt709 -color_primaries bt709 -color_trc iec61966-2-1 -src_range 1 -dst_range 1 \"%s\"",
+        ffmpegPath.GetString(), max(0.0, timePosition), filePath.GetString(), tempImagePath.GetString());
 
-    CString run = ff;
-    RunProcessAndWait(run, 8000, NULL);
+    DWORD exitCode = 0;
+    BOOL success = RunProcessAndWait(ff, 8000, &exitCode);
 
-    if (GetFileAttributesW(tempImagePath) != INVALID_FILE_ATTRIBUTES) {
+    if (success && exitCode == 0 && GetFileAttributesW(tempImagePath) != INVALID_FILE_ATTRIBUTES) {
         LoadBitmapFromFile(tempImagePath);
         DeleteFileW(tempImagePath);
     }
@@ -1593,6 +1627,7 @@ void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePo
 
     InvalidateRect(&m_rcPreview, FALSE);
 }
+
 
 
 void NWPVideoEditorView::LoadBitmapFromFile(const CString& imagePath) {
@@ -1640,17 +1675,23 @@ void NWPVideoEditorView::CreateTestFrame(const CString& filePath, double timePos
     CRect timeRect(20, 170, 460, 200);
     memDC.DrawText(timeText, &timeRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-    // Show FFmpeg status
+    // Show configuration status
     CString statusText;
-    memDC.SetTextColor(RGB(255, 200, 100));
-    statusText.LoadString(IDS_LBL_FFMPEG_FAILED);
-
+    if (!m_config.IsFFmpegConfigured()) {
+        memDC.SetTextColor(RGB(255, 200, 100));
+        statusText = L"FFmpeg not configured\nClick 'Load FFmpeg' button to select folder";
+    }
+    else {
+        memDC.SetTextColor(RGB(255, 150, 150));
+        statusText = L"Frame extraction failed\nCheck video file format";
+    }
 
     CRect statusRect(20, 220, 460, 280);
     memDC.DrawText(statusText, &statusRect, DT_CENTER | DT_VCENTER | DT_WORDBREAK);
 
     memDC.SelectObject(oldBitmap);
 }
+
 
 
 void NWPVideoEditorView::CreateBlackFrame() {

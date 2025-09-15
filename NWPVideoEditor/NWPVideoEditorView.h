@@ -2,6 +2,7 @@
 #include <vector>
 #include <afxcmn.h>
 #include "TextInputDialog.h"
+#include "Config.h"
 
 struct ClipItem {
     CString path;
@@ -111,11 +112,12 @@ public:
     CButton m_playPauseButton;
     CButton m_stopButton;
     CButton m_addTextButton;
-    CButton m_loadFFmpegButton;
     bool m_isPlaying = false;
     UINT_PTR m_playbackTimer = 0;
     double m_playbackStartTime = 0.0;
     DWORD m_playbackStartTick = 0;
+
+    EditorConfig m_config;
 
 public:
     virtual void OnDraw(CDC* pDC);
