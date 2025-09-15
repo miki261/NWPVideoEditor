@@ -21,7 +21,7 @@ Build configurations supported:
 
 ## Run
 1) Download FFmpeg from https://ffmpeg.org/ (You need ffmpeg.exe and ffprobe.exe from the bin folder).
-2) Click Load FFmpeg inside the app and locate your ffmpeg folder. 
+2) Settings > Load FFmpeg and locate your ffmpeg folder.
 3) File > Open and select a media file (mp4/mov/mkv/avi/mp3/wav).
 4) Double-click / drag-drop the imported tile to place it on the timeline.
 5) Drag the edges to change the length of the video.
