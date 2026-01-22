@@ -17,6 +17,7 @@ struct TimelineClip {
     double clipLengthSec = 10.0;
     double originalDuration = 30.0;
     int iImage = -1;
+    HBITMAP hThumbnail = nullptr;
 };
 
 struct TextOverlay {
@@ -186,6 +187,7 @@ private:
     double GetCurrentClipDuration();
     void ExecuteFFmpegCommand(const CString& command);
     static BOOL RunProcessAndWait(const CString& cmdLine, DWORD waitMS, DWORD* pExit = nullptr);
+    HBITMAP ExtractThumbnail(const CString& videoPath, double timePosition);
 };
 
 #ifndef _DEBUG

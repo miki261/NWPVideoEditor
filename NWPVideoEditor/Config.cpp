@@ -7,17 +7,20 @@ EditorConfig::EditorConfig() {
     m_isConfigured = false;
     m_ffmpegPath.clear();
     m_ffprobePath.clear();
+    m_folderPath.clear();
 }
 
 void EditorConfig::SetFFmpegFolder(const std::wstring& folderPath) {
     if (folderPath.empty()) {
         m_ffmpegPath.clear();
         m_ffprobePath.clear();
+        m_folderPath.clear();
         m_isConfigured = false;
         return;
     }
 
     // Create full paths
+    m_folderPath = folderPath;
     m_ffmpegPath = folderPath + L"\\ffmpeg.exe";
     m_ffprobePath = folderPath + L"\\ffprobe.exe";
 

@@ -123,5 +123,24 @@ void CNWPVideoEditorApp::PreLoadState()
     GetContextMenuManager()->AddMenu(strName, IDR_POPUP_EXPLORER);
 }
 
-void CNWPVideoEditorApp::LoadCustomState() {}
-void CNWPVideoEditorApp::SaveCustomState() {}
+void CNWPVideoEditorApp::LoadCustomState() {
+}
+
+void CNWPVideoEditorApp::SaveCustomState() {
+    // Get main frame
+    CMainFrame* pFrame = (CMainFrame*)m_pMainWnd;
+    if (!pFrame) return;
+
+    // Get view
+    CFrameWnd* pChild = pFrame->GetActiveFrame();
+    if (!pChild) return;
+
+    NWPVideoEditorView* pView = (NWPVideoEditorView*)pChild->GetActiveView();
+    if (!pView) return;
+
+    // Save FFmpeg path to registry
+    if (pView->m_config.IsFFmpegConfigured()) {
+        CString path = pView->m_config.GetFolderPath().c_str();
+        WriteProfileString(_T("Settings"), _T("FFmpegFolder"), path);
+    }
+}
