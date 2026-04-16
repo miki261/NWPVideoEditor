@@ -1,15 +1,13 @@
 #pragma once
 
-class CMainFrame : public CFrameWndEx
-{
+class CMainFrame : public CFrameWndEx {
 protected:
     CMainFrame() noexcept;
     DECLARE_DYNCREATE(CMainFrame)
 
 public:
     virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
-    virtual BOOL LoadFrame(
-        UINT nIDResource,
+    virtual BOOL LoadFrame(UINT nIDResource,
         DWORD dwDefaultStyle = WS_OVERLAPPEDWINDOW | FWS_ADDTOTITLE,
         CWnd* pParentWnd = nullptr,
         CCreateContext* pContext = nullptr);

@@ -4,7 +4,6 @@
 #include "afxdialogex.h"
 #include "NWPVideoEditor.h"
 #include "MainFrm.h"
-
 #include "NWPVideoEditorDoc.h"
 #include "NWPVideoEditorView.h"
 
@@ -18,8 +17,7 @@ BEGIN_MESSAGE_MAP(CNWPVideoEditorApp, CWinAppEx)
     ON_COMMAND(ID_FILE_OPEN, &CWinAppEx::OnFileOpen)
 END_MESSAGE_MAP()
 
-CNWPVideoEditorApp::CNWPVideoEditorApp() noexcept
-{
+CNWPVideoEditorApp::CNWPVideoEditorApp() noexcept {
     m_bHiColorIcons = TRUE;
     m_nAppLook = 0;
     m_dwRestartManagerSupportFlags = AFX_RESTART_MANAGER_SUPPORT_ALL_ASPECTS;
@@ -31,8 +29,7 @@ CNWPVideoEditorApp::CNWPVideoEditorApp() noexcept
 
 CNWPVideoEditorApp theApp;
 
-BOOL CNWPVideoEditorApp::InitInstance()
-{
+BOOL CNWPVideoEditorApp::InitInstance() {
     INITCOMMONCONTROLSEX InitCtrls;
     InitCtrls.dwSize = sizeof(InitCtrls);
     InitCtrls.dwICC = ICC_WIN95_CLASSES;
@@ -40,56 +37,48 @@ BOOL CNWPVideoEditorApp::InitInstance()
 
     CWinAppEx::InitInstance();
 
-    if (!AfxOleInit())
-    {
+    if (!AfxOleInit()) {
         AfxMessageBox(IDP_OLE_INIT_FAILED);
         return FALSE;
     }
 
     AfxEnableControlContainer();
-
     EnableTaskbarInteraction(FALSE);
-
     SetRegistryKey(_T("Local AppWizard-Generated Applications"));
     LoadStdProfileSettings(4);
 
     InitContextMenuManager();
     InitKeyboardManager();
     InitTooltipManager();
+
     CMFCToolTipInfo ttParams;
     ttParams.m_bVislManagerTheme = TRUE;
     theApp.GetTooltipManager()->SetTooltipParams(AFX_TOOLTIP_TYPE_ALL,
         RUNTIME_CLASS(CMFCToolTipCtrl), &ttParams);
 
-    CSingleDocTemplate* pDocTemplate;
-    pDocTemplate = new CSingleDocTemplate(
+    CSingleDocTemplate* pDocTemplate = new CSingleDocTemplate(
         IDR_MAINFRAME,
         RUNTIME_CLASS(CNWPVideoEditorDoc),
         RUNTIME_CLASS(CMainFrame),
         RUNTIME_CLASS(NWPVideoEditorView));
-    if (!pDocTemplate)
-        return FALSE;
+    if (!pDocTemplate) return FALSE;
     AddDocTemplate(pDocTemplate);
 
     CCommandLineInfo cmdInfo;
     ParseCommandLine(cmdInfo);
-
-    if (!ProcessShellCommand(cmdInfo))
-        return FALSE;
+    if (!ProcessShellCommand(cmdInfo)) return FALSE;
 
     m_pMainWnd->ShowWindow(SW_SHOW);
     m_pMainWnd->UpdateWindow();
     return TRUE;
 }
 
-int CNWPVideoEditorApp::ExitInstance()
-{
+int CNWPVideoEditorApp::ExitInstance() {
     AfxOleTerm(FALSE);
     return CWinAppEx::ExitInstance();
 }
 
-class CAboutDlg : public CDialogEx
-{
+class CAboutDlg : public CDialogEx {
 public:
     CAboutDlg() noexcept;
 #ifdef AFX_DESIGN_TIME
@@ -105,14 +94,12 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX) { CDialogEx::DoDataExchange(p
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
 END_MESSAGE_MAP()
 
-void CNWPVideoEditorApp::OnAppAbout()
-{
+void CNWPVideoEditorApp::OnAppAbout() {
     CAboutDlg aboutDlg;
     aboutDlg.DoModal();
 }
 
-void CNWPVideoEditorApp::PreLoadState()
-{
+void CNWPVideoEditorApp::PreLoadState() {
     BOOL bNameValid;
     CString strName;
     bNameValid = strName.LoadString(IDS_EDIT_MENU);
@@ -123,22 +110,15 @@ void CNWPVideoEditorApp::PreLoadState()
     GetContextMenuManager()->AddMenu(strName, IDR_POPUP_EXPLORER);
 }
 
-void CNWPVideoEditorApp::LoadCustomState() {
-}
+void CNWPVideoEditorApp::LoadCustomState() {}
 
 void CNWPVideoEditorApp::SaveCustomState() {
-    // Get main frame
     CMainFrame* pFrame = (CMainFrame*)m_pMainWnd;
     if (!pFrame) return;
-
-    // Get view
     CFrameWnd* pChild = pFrame->GetActiveFrame();
     if (!pChild) return;
-
     NWPVideoEditorView* pView = (NWPVideoEditorView*)pChild->GetActiveView();
     if (!pView) return;
-
-    // Save FFmpeg path to registry
     if (pView->m_config.IsFFmpegConfigured()) {
         CString path = pView->m_config.GetFolderPath().c_str();
         WriteProfileString(_T("Settings"), _T("FFmpegFolder"), path);

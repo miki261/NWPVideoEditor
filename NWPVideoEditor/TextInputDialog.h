@@ -1,30 +1,27 @@
 #pragma once
-#include <afxwin.h>
+#include <afxdialogex.h>
+#include "resource.h"
 
-class CTextInputDialog : public CWnd
+class CTextInputDialog : public CDialogEx
 {
+    DECLARE_DYNAMIC(CTextInputDialog)
+
 public:
-    CTextInputDialog();
+    CTextInputDialog(CWnd* pParent = nullptr);
     virtual ~CTextInputDialog();
 
-    INT_PTR DoModal(CWnd* pParent = nullptr);
     CString GetText() const { return m_text; }
 
+    enum { IDD = IDD_TEXT_INPUT_DIALOG };
+
 protected:
-    afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
-    afx_msg void OnPaint();
-    afx_msg void OnOK();
-    afx_msg void OnCancel();
-    afx_msg void OnClose();
+    virtual void DoDataExchange(CDataExchange* pDX);
+    virtual BOOL OnInitDialog();
+    virtual void OnOK();
 
     DECLARE_MESSAGE_MAP()
 
 private:
-    CEdit m_edit;
-    CButton m_btnOK;
-    CButton m_btnCancel;
-    CString m_text;
-    CFont m_font;
-    bool m_modalResult;
-    INT_PTR m_result;
+    CString  m_text;
+    CEdit    m_editCtrl;
 };

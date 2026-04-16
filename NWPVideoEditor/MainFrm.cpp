@@ -16,30 +16,21 @@ END_MESSAGE_MAP()
 CMainFrame::CMainFrame() noexcept {}
 CMainFrame::~CMainFrame() {}
 
-int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
-{
-    if (CFrameWndEx::OnCreate(lpCreateStruct) == -1)
-        return -1;
-
+int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
+    if (CFrameWndEx::OnCreate(lpCreateStruct) == -1) return -1;
     EnableDocking(CBRS_ALIGN_ANY);
-
     return 0;
 }
 
-BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
-{
-    if (!CFrameWndEx::PreCreateWindow(cs))
-        return FALSE;
-    return TRUE;
+BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs) {
+    return CFrameWndEx::PreCreateWindow(cs);
 }
 
-BOOL CMainFrame::LoadFrame(UINT nIDResource, DWORD dwDefaultStyle, CWnd* pParentWnd, CCreateContext* pContext)
-{
+BOOL CMainFrame::LoadFrame(UINT nIDResource, DWORD dwDefaultStyle, CWnd* pParentWnd, CCreateContext* pContext) {
     return CFrameWndEx::LoadFrame(nIDResource, dwDefaultStyle, pParentWnd, pContext);
 }
 
-void CMainFrame::OnSettingChange(UINT uFlags, LPCTSTR lpszSection)
-{
+void CMainFrame::OnSettingChange(UINT uFlags, LPCTSTR lpszSection) {
     CFrameWndEx::OnSettingChange(uFlags, lpszSection);
 }
 

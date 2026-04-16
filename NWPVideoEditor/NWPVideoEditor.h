@@ -6,8 +6,7 @@
 
 #include "resource.h"
 
-class CNWPVideoEditorApp : public CWinAppEx
-{
+class CNWPVideoEditorApp : public CWinAppEx {
 public:
     CNWPVideoEditorApp() noexcept;
 

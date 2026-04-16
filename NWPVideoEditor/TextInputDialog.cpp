@@ -2,139 +2,51 @@
 #include "TextInputDialog.h"
 #include "Resource.h"
 
-BEGIN_MESSAGE_MAP(CTextInputDialog, CWnd)
-    ON_WM_CREATE()
-    ON_WM_PAINT()
-    ON_BN_CLICKED(IDOK, OnOK)
-    ON_BN_CLICKED(IDCANCEL, OnCancel)
-    ON_WM_CLOSE()
-END_MESSAGE_MAP()
+IMPLEMENT_DYNAMIC(CTextInputDialog, CDialogEx)
 
-CTextInputDialog::CTextInputDialog()
-    : m_modalResult(false), m_result(IDCANCEL)
+CTextInputDialog::CTextInputDialog(CWnd* pParent)
+    : CDialogEx(IDD_TEXT_INPUT_DIALOG, pParent)
 {
 }
 
-CTextInputDialog::~CTextInputDialog()
+CTextInputDialog::~CTextInputDialog() {}
+
+void CTextInputDialog::DoDataExchange(CDataExchange* pDX)
 {
+    CDialogEx::DoDataExchange(pDX);
+    DDX_Control(pDX, IDC_TEXT_INPUT_EDIT, m_editCtrl);
 }
 
-INT_PTR CTextInputDialog::DoModal(CWnd* pParent)
+BOOL CTextInputDialog::OnInitDialog()
 {
-    CString className = AfxRegisterWndClass(CS_DBLCLKS | CS_HREDRAW | CS_VREDRAW,
-        LoadCursor(NULL, IDC_ARROW), (HBRUSH)(COLOR_BTNFACE + 1), NULL);
+    CDialogEx::OnInitDialog();
 
-    CString strTitle;
-    strTitle.LoadString(IDS_ADD_TEXT_OVERLAY_TITLE);
+    CString hint;
+    hint.LoadString(IDS_YOUR_TEXT_HERE);
+    m_editCtrl.SetWindowText(hint);
+    m_editCtrl.SetSel(0, -1);
+    m_editCtrl.SetFocus();
 
-    if (!CreateEx(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, className, strTitle,
-        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        0, 0, 350, 120, pParent ? pParent->GetSafeHwnd() : NULL, NULL))
-        return IDCANCEL;
-
-    CenterWindow(pParent);
-
-    if (pParent)
-        pParent->EnableWindow(FALSE);
-
-    MSG msg;
-    m_modalResult = false;
-    while (!m_modalResult) {
-        GetMessage(&msg, NULL, 0, 0);
-        if (msg.message == WM_KEYDOWN && msg.wParam == VK_RETURN) {
-            OnOK();
-            continue;
-        }
-        if (msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE) {
-            OnCancel();
-            continue;
-        }
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
-
-    if (pParent)
-        pParent->EnableWindow(TRUE);
-
-    DestroyWindow();
-    return m_result;
-}
-
-int CTextInputDialog::OnCreate(LPCREATESTRUCT lpCreateStruct)
-{
-    if (CWnd::OnCreate(lpCreateStruct) == -1)
-        return -1;
-
-    m_font.CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, 0, ANSI_CHARSET,
-        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-        DEFAULT_PITCH | FF_SWISS, _T("Segoe UI"));
-
-    m_edit.Create(WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL,
-        CRect(15, 25, 320, 50), this, 1001);
-    m_edit.SetFont(&m_font);
-
-    CString strDefault;
-    strDefault.LoadString(IDS_YOUR_TEXT_HERE);
-    m_edit.SetWindowText(strDefault);
-    m_edit.SetSel(0, -1);
-    m_edit.SetFocus();
-
-    CString strAddText, strCancel;
-    strAddText.LoadString(IDS_ADD_TEXT);
-    strCancel.LoadString(IDS_CANCEL);
-
-    m_btnOK.Create(strAddText, WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP,
-        CRect(170, 60, 240, 85), this, IDOK);
-    m_btnOK.SetFont(&m_font);
-
-    m_btnCancel.Create(strCancel, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
-        CRect(250, 60, 320, 85), this, IDCANCEL);
-    m_btnCancel.SetFont(&m_font);
-
-    return 0;
-}
-
-void CTextInputDialog::OnPaint()
-{
-    CPaintDC dc(this);
-    CFont* oldFont = dc.SelectObject(&m_font);
-    dc.SetBkMode(TRANSPARENT);
-    dc.SetTextColor(RGB(0, 0, 0));
-
-    CString strEnterText;
-    strEnterText.LoadString(IDS_ENTER_TEXT);
-    dc.TextOut(15, 8, strEnterText);
-
-    dc.SelectObject(oldFont);
+    return FALSE; // FALSE because we set focus manually
 }
 
 void CTextInputDialog::OnOK()
 {
-    m_edit.GetWindowText(m_text);
+    m_editCtrl.GetWindowText(m_text);
+    m_text.Trim();
+
     if (m_text.IsEmpty()) {
-        CString strDefault;
-        strDefault.LoadString(IDS_YOUR_TEXT_HERE);
-        m_text = strDefault;
-
-        CString strTitle, strMessage;
-        strTitle.LoadString(IDS_TEXT_REQUIRED);
-        strMessage.LoadString(IDS_PLEASE_ENTER_TEXT);
-        MessageBox(strMessage, strTitle, MB_OK | MB_ICONINFORMATION);
-        m_edit.SetFocus();
-        m_edit.SetSel(0, -1);
-        return;
+        CString msg;
+        msg.LoadString(IDS_TEXT_REQUIRED);
+        CString title;
+        title.LoadString(IDS_PLEASE_ENTER_TEXT);
+        MessageBox(msg, title, MB_OK | MB_ICONWARNING);
+        m_editCtrl.SetFocus();
+        return; // Don't close
     }
-    m_result = IDOK;
-    m_modalResult = true;
+
+    CDialogEx::OnOK();
 }
 
-void CTextInputDialog::OnCancel()
-{
-    m_result = IDCANCEL;
-    m_modalResult = true;
-}
-
-void CTextInputDialog::OnClose()
-{
-    OnCancel();
-}
+BEGIN_MESSAGE_MAP(CTextInputDialog, CDialogEx)
+END_MESSAGE_MAP()

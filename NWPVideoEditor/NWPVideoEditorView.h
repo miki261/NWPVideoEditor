@@ -16,7 +16,7 @@ struct TimelineClip {
     double clipStartSec = 0.0;
     double clipLengthSec = 10.0;
     double originalDuration = 30.0;
-    int iImage = -1;
+    int    iImage = -1;
     HBITMAP hThumbnail = nullptr;
 };
 
@@ -34,16 +34,9 @@ struct TextOverlay {
     }
 };
 
-struct OverlayItem {
-    CString text;
-    double startSec;
-    double durSec;
-};
-
 class CNWPVideoEditorDoc;
 
-class NWPVideoEditorView : public CView
-{
+class NWPVideoEditorView : public CView {
 protected:
     NWPVideoEditorView();
     DECLARE_DYNCREATE(NWPVideoEditorView)
@@ -60,22 +53,19 @@ public:
     CString     m_currentPreviewPath;
     double      m_previewTimePosition;
 
-    // Native video size and preview mapping
-    int m_videoWidth = 480;
-    int m_videoHeight = 360;
+    int    m_videoWidth = 480;
+    int    m_videoHeight = 360;
     double m_prevScaleX = 1.0;
     double m_prevScaleY = 1.0;
-    int m_prevOffX = 0;
-    int m_prevOffY = 0;
+    int    m_prevOffX = 0;
+    int    m_prevOffY = 0;
 
     std::vector<TimelineClip> m_timelineClips;
-    int m_activeTimelineClipIndex = -1;
-    CRect   m_rcTimeline;
+    int   m_activeTimelineClipIndex = -1;
+    CRect m_rcTimeline;
 
     std::vector<TextOverlay> m_textOverlays;
     int m_activeTextOverlayIndex = -1;
-
-    std::vector<OverlayItem> m_overlays;
 
     enum DragState {
         DRAG_NONE,
@@ -89,34 +79,35 @@ public:
     };
 
     DragState m_dragState = DRAG_NONE;
-    CPoint m_dragStart{};
-    double m_dragStartClipStart = 0.0;
-    double m_dragStartClipLength = 0.0;
-    double m_dragStartTimelinePos = 0.0;
-    double m_dragStartTextStart = 0.0;
-    double m_dragStartTextDur = 0.0;
-    int m_draggingTextIndex = -1;
-    CPoint m_textDragStart{};
+    CPoint    m_dragStart{};
+    double    m_dragStartClipStart = 0.0;
+    double    m_dragStartClipLength = 0.0;
+    double    m_dragStartTimelinePos = 0.0;
+    double    m_dragStartTextStart = 0.0;
+    double    m_dragStartTextDur = 0.0;
+    int       m_draggingTextIndex = -1;
+    CPoint    m_textDragStart{};
 
-    int m_nDragIndex = -1;
-    BOOL m_bDragging = FALSE;
+    int        m_nDragIndex = -1;
+    BOOL       m_bDragging = FALSE;
     CImageList* m_pDragImage = nullptr;
 
     double m_timelineDurationSec = 60.0;
     double m_timelineScrollOffset = 0.0;
-    int m_contextMenuClipIndex = -1;
+    int    m_contextMenuClipIndex = -1;
 
     double m_hoverTimePosition = -1.0;
-    int m_hoverClipIndex = -1;
-    bool m_showSelectionBar = false;
+    int    m_hoverClipIndex = -1;
+    bool   m_showSelectionBar = false;
 
-    CButton m_playPauseButton;
-    CButton m_stopButton;
-    CButton m_addTextButton;
-    bool m_isPlaying = false;
+    CButton  m_playPauseButton;
+    CButton  m_stopButton;
+    CButton  m_addTextButton;
+    bool     m_isPlaying = false;
     UINT_PTR m_playbackTimer = 0;
-    double m_playbackStartTime = 0.0;
-    DWORD m_playbackStartTick = 0;
+    double   m_playbackStartTime = 0.0;
+    DWORD    m_playbackStartTick = 0;
+    DWORD    m_lastPreviewUpdateTick = 0;
 
     EditorConfig m_config;
 
@@ -157,42 +148,39 @@ protected:
     DECLARE_MESSAGE_MAP()
 
 private:
-    int  AddShellIconForFile(const CString& path);
-    void Layout(int cx, int cy);
-    void DrawTimeline(CDC* pDC);
-    void DrawPreviewFrame(CDC* pDC);
-    void DrawTextOverlays(CDC* pDC);
-    void UpdatePreview();
-    void LoadPreviewFrame(const CString& filePath, double timePosition);
-    void LoadBitmapFromFile(const CString& imagePath);
-    void CreateTestFrame(const CString& filePath, double timePosition);
-    void CreateBlackFrame();
-    void ClearPreview();
-    void SetActiveClipFromSelection();
-    int  HitTestTimelineHandle(CPoint pt) const;
-    int  HitTestTimelineClip(CPoint pt) const;
-    int  HitTestTimelineTextOverlay(CPoint pt) const;
-    int  HitTestTextOverlayHandles(CPoint pt) const;
-    int  HitTestTextOverlayInPreview(CPoint pt) const;
+    int     AddShellIconForFile(const CString& path);
+    void    Layout(int cx, int cy);
+    void    DrawTimeline(CDC* pDC);
+    void    DrawPreviewFrame(CDC* pDC);
+    void    DrawTextOverlays(CDC* pDC);
+    void    UpdatePreview();
+    void    LoadPreviewFrame(const CString& filePath, double timePosition);
+    void    LoadBitmapFromFile(const CString& imagePath);
+    void    CreateTestFrame(const CString& filePath, double timePosition);
+    void    CreateBlackFrame();
+    void    ClearPreview();
+    int     HitTestTimelineClip(CPoint pt) const;
+    int     HitTestTimelineTextOverlay(CPoint pt) const;
+    int     HitTestTextOverlayHandles(CPoint pt) const;
+    int     HitTestTextOverlayInPreview(CPoint pt) const;
     CString BuildTextOverlayFilter() const;
-    double TimelineXToSeconds(int x) const;
-    int SecondsToTimelineX(double seconds) const;
-    double GetVideoDurationAndSize(const CString& filePath, int& outW, int& outH);
-    void RepositionClipsAfterRemoval();
-    BOOL IsOverTimeline(CPoint screenPt);
-    void AddClipToTimeline(const CString& clipPath);
-    void StartPlayback();
-    void StopPlayback();
-    void UpdatePlaybackFrame();
-    double GetCurrentClipDuration();
-    void ExecuteFFmpegCommand(const CString& command);
+    double  TimelineXToSeconds(int x) const;
+    int     SecondsToTimelineX(double seconds) const;
+    double  GetVideoDurationAndSize(const CString& filePath, int& outW, int& outH);
+    void    RepositionClipsAfterRemoval();
+    BOOL    IsOverTimeline(CPoint screenPt);
+    void    AddClipToTimeline(const CString& clipPath);
+    void    StartPlayback();
+    void    StopPlayback();
+    void    UpdatePlaybackFrame();
+    double  GetCurrentClipDuration();
+    void    ExecuteFFmpegCommand(const CString& command);
     static BOOL RunProcessAndWait(const CString& cmdLine, DWORD waitMS, DWORD* pExit = nullptr);
     HBITMAP ExtractThumbnail(const CString& videoPath, double timePosition);
 };
 
 #ifndef _DEBUG
-inline CNWPVideoEditorDoc* NWPVideoEditorView::GetDocument() const
-{
+inline CNWPVideoEditorDoc* NWPVideoEditorView::GetDocument() const {
     return reinterpret_cast<CNWPVideoEditorDoc*>(m_pDocument);
 }
 #endif

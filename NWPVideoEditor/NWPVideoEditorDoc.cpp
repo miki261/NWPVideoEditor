@@ -2,7 +2,6 @@
 #include "framework.h"
 #include "NWPVideoEditor.h"
 #include "NWPVideoEditorDoc.h"
-#include <propkey.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -16,21 +15,14 @@ END_MESSAGE_MAP()
 CNWPVideoEditorDoc::CNWPVideoEditorDoc() noexcept {}
 CNWPVideoEditorDoc::~CNWPVideoEditorDoc() {}
 
-BOOL CNWPVideoEditorDoc::OnNewDocument()
-{
-    if (!CDocument::OnNewDocument())
-        return FALSE;
+BOOL CNWPVideoEditorDoc::OnNewDocument() {
+    if (!CDocument::OnNewDocument()) return FALSE;
     return TRUE;
 }
 
-void CNWPVideoEditorDoc::Serialize(CArchive& ar)
-{
-    if (ar.IsStoring())
-    {
-    }
-    else
-    {
-    }
+void CNWPVideoEditorDoc::Serialize(CArchive& ar) {
+    if (ar.IsStoring()) {}
+    else {}
 }
 
 #ifdef _DEBUG
