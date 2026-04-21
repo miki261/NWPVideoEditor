@@ -5,7 +5,7 @@ A simple MFC-based video utility demonstrating:
 - Placing a clip on a bottom timeline (double-click the clip/ drag-drop it to the timeline).
 - Resize clips by dragging timeline handles.
 - Optional text overlays positioned anywhere in preview window
-- Export the final video with File - Save.
+- Export the final video with File - Save As.
 
 ## Requirements
 - Windows 10/11
