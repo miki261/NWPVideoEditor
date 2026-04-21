@@ -26,7 +26,7 @@ Build configurations supported:
 4) Double-click / drag-drop the imported tile to place it on the timeline.
 5) Drag the edges to change the length of the video.
 6) (Optional) Click “Add Text” to add a sample overlay; multiple overlays are supported.
-7) File > Save to render using ffmpeg.
+7) File > Save As to render using ffmpeg.
    
 ## What this version does
 - Displays imported video files as large icons in the main list view (MP4, MOV, MKV, AVI video formats supported).
