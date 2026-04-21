@@ -518,6 +518,13 @@ void NWPVideoEditorView::OnDeleteTextOverlay()
 
 void NWPVideoEditorView::DrawTextOverlays(CDC* pDC)
 {
+    double timelineTime = m_previewTimePosition;
+    if (m_activeTimelineClipIndex >= 0 &&
+        m_activeTimelineClipIndex < (int)m_timelineClips.size())
+    {
+        const TimelineClip& clip = m_timelineClips[m_activeTimelineClipIndex];
+        timelineTime = clip.startTimeOnTimeline + (m_previewTimePosition - clip.clipStartSec);
+    }
     CRect inner = m_rcPreview;
     inner.DeflateRect(2, 2);
 
