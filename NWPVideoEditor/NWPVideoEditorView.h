@@ -144,6 +144,7 @@ protected:
     afx_msg void OnPlayPause();
     afx_msg void OnStop();
     afx_msg void OnTimer(UINT_PTR nIDEvent);
+    afx_msg void OnFileNew();
     afx_msg void OnLoadFFmpegFolder();
     DECLARE_MESSAGE_MAP()
 

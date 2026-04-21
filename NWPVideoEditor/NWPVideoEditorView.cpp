@@ -37,6 +37,7 @@ BEGIN_MESSAGE_MAP(NWPVideoEditorView, CView)
     ON_BN_CLICKED(ID_PLAY_PAUSE_BUTTON, &NWPVideoEditorView::OnPlayPause)
     ON_BN_CLICKED(ID_STOP_BUTTON, &NWPVideoEditorView::OnStop)
     ON_COMMAND(ID_SETTINGS_LOAD_FFMPEG, &NWPVideoEditorView::OnLoadFFmpegFolder)
+    ON_COMMAND(ID_FILE_NEW, &NWPVideoEditorView::OnFileNew)
     ON_WM_TIMER()
 END_MESSAGE_MAP()
 
@@ -181,6 +182,59 @@ void NWPVideoEditorView::Layout(int cx, int cy)
     }
 
     m_rcTimeline = CRect(margin, cy - timelineH, cx - margin, cy - margin);
+    Invalidate(FALSE);
+}
+
+// ─────────────────────────────────────────────────────────────
+// On File - New
+// ─────────────────────────────────────────────────────────────
+
+void NWPVideoEditorView::OnFileNew()
+{
+    if (!m_timelineClips.empty() || !m_importedClips.empty() || !m_textOverlays.empty()) {
+        if (AfxMessageBox(L"Start a new project? All unsaved changes will be lost.",
+            MB_YESNO | MB_ICONQUESTION) != IDYES)
+            return;
+    }
+
+    // Stop playback
+    StopPlayback();
+
+    // Clear timeline clips and their thumbnails
+    for (auto& clip : m_timelineClips) {
+        if (clip.hThumbnail) {
+            DeleteObject(clip.hThumbnail);
+            clip.hThumbnail = nullptr;
+        }
+    }
+    m_timelineClips.clear();
+    m_activeTimelineClipIndex = -1;
+    m_contextMenuClipIndex = -1;
+
+    // Clear text overlays
+    m_textOverlays.clear();
+    m_activeTextOverlayIndex = -1;
+
+    // Clear imported clip list
+    m_importedClips.clear();
+    m_list.DeleteAllItems();
+    m_imgLarge.DeleteImageList();
+    m_imgLarge.Create(96, 96, ILC_COLOR32 | ILC_MASK, 1, 32);
+    m_list.SetImageList(&m_imgLarge, LVSIL_NORMAL);
+
+    // Clear preview
+    ClearPreview();
+
+    // Reset timeline state
+    m_timelineDurationSec = 60.0;
+    m_timelineScrollOffset = 0.0;
+    m_dragState = DRAG_NONE;
+    m_bDragging = FALSE;
+    m_hoverTimePosition = -1.0;
+    m_hoverClipIndex = -1;
+    m_showSelectionBar = false;
+    m_previewTimePosition = 0.0;
+
     Invalidate(FALSE);
 }
 
