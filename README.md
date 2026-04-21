@@ -35,6 +35,8 @@ Build configurations supported:
 - Drag handles to trim video/text start/end points.
 - Right-click clips for "Split" and "Remove" commands.
 - Right-click text overlays for "Remove" command.
+- Yellow line on the timeline shows the exact frame you are hovering over.
+- Red line on the timeline shows the current playback position (it moves as the video plays).
 
 ## License
 Educational sample for coursework.
