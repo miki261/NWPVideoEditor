@@ -44,7 +44,7 @@ BOOL CNWPVideoEditorApp::InitInstance() {
 
     AfxEnableControlContainer();
     EnableTaskbarInteraction(FALSE);
-    SetRegistryKey(_T("Local AppWizard-Generated Applications"));
+    SetRegistryKey(_T("NWPVideoEditor"));
     LoadStdProfileSettings(4);
 
     InitContextMenuManager();
