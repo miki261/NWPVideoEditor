@@ -193,7 +193,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Config.h" />
-    <ClInclude Include="FfmpegProcess.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="NWPVideoEditor.h" />
@@ -206,7 +205,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Config.cpp" />
-    <ClCompile Include="FfmpegProcess.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="NWPVideoEditor.cpp" />
     <ClCompile Include="NWPVideoEditorDoc.cpp" />
