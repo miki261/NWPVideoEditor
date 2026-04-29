@@ -160,6 +160,42 @@
 #define IDS_FMT_DRAWTEXT_FILTER         40063
 #define IDS_DRAWTEXT_COMMA              40064
 
+// --- String Resources: Command Templates ---
+#define IDS_CMD_EXPORT_SINGLE_WITH_TEXT   40065
+#define IDS_CMD_EXPORT_SINGLE_NO_TEXT     40066
+#define IDS_CMD_EXPORT_MULTI_BEGIN        40067
+#define IDS_CMD_EXPORT_MULTI_INPUT        40068
+#define IDS_CMD_EXPORT_MULTI_CONCAT       40069
+#define IDS_CMD_EXPORT_MULTI_MAP_TEXT     40070
+#define IDS_CMD_EXPORT_MULTI_MAP_PLAIN    40071
+#define IDS_CMD_EXPORT_ENCODE_TAIL        40072
+#define IDS_CMD_PREVIEW_FRAME             40073
+#define IDS_CMD_THUMBNAIL_FRAME           40074
+#define IDS_CMD_FFPROBE_DURATION          40075
+#define IDS_CMD_FFPROBE_SIZE              40076
+
+// --- String Resources: Profile Keys ---
+#define IDS_PROFILE_SECTION_SETTINGS   40077
+#define IDS_PROFILE_KEY_FFMPEG_FOLDER  40078
+
+// --- String Resources: File Dialog Defaults ---
+#define IDS_DEFAULT_EXPORT_EXT       40079
+#define IDS_DEFAULT_EXPORT_FILENAME  40080
+
+// --- String Resources: Command Fragments / Formats ---
+#define IDS_CMD_FILTER_COMPLEX_BEGIN     40081
+#define IDS_CMD_FILTER_COMPLEX_SEGMENT   40082
+#define IDS_CMD_FILTER_COMPLEX_TEXT_IN   40083
+#define IDS_CMD_FILTER_COMPLEX_TEXT_OUT  40084
+
+// --- String Resources: Temp File Formats ---
+#define IDS_FMT_TEMP_PREVIEW_FRAME       40085
+#define IDS_FMT_TEMP_THUMBNAIL_FRAME     40086
+
+// --- String Resources: UI Labels / Fonts ---
+#define IDS_FONT_TIMELINE_UI             40087
+#define IDS_LBL_TEXT_TRACK               40088
+
 // --- Next default values for new objects ---
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS

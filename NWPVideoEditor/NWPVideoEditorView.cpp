@@ -89,52 +89,46 @@ int NWPVideoEditorView::OnCreate(LPCREATESTRUCT cs)
 
     CRect rc(0, 0, 100, 100);
     DWORD style = WS_CHILD | WS_VISIBLE | LVS_ICON | LVS_AUTOARRANGE | LVS_SINGLESEL;
+
     if (!m_list.Create(style, rc, this, 1001))
         return -1;
 
-    m_list.SetExtendedStyle(m_list.GetExtendedStyle() |
-        LVS_EX_ONECLICKACTIVATE | LVS_EX_TWOCLICKACTIVATE);
+    m_list.SetExtendedStyle(m_list.GetExtendedStyle() | LVS_EX_ONECLICKACTIVATE | LVS_EX_TWOCLICKACTIVATE);
     m_list.SetBkColor(RGB(45, 45, 45));
     m_list.SetTextBkColor(RGB(45, 45, 45));
     m_list.SetTextColor(RGB(220, 220, 220));
 
     if (!m_imgLarge.Create(96, 96, ILC_COLOR32 | ILC_MASK, 1, 32))
         return -1;
+
     m_list.SetImageList(&m_imgLarge, LVSIL_NORMAL);
 
     m_rcPreview = CRect(0, 0, 720, 405);
 
     CString strText;
 
-    // Play / Pause button
     strText.LoadString(IDS_BTN_PLAY);
-    if (!m_playPauseButton.Create(strText,
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        CRect(0, 0, 60, 25),
-        this,
-        ID_PLAY_PAUSE_BUTTON))
+    if (!m_playPauseButton.Create(strText, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        CRect(0, 0, 60, 25), this, ID_PLAY_PAUSE_BUTTON))
         return -1;
 
-    // Stop button
     strText.LoadString(IDS_BTN_STOP);
-    if (!m_stopButton.Create(strText,
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        CRect(0, 0, 60, 25),
-        this,
-        ID_STOP_BUTTON))
+    if (!m_stopButton.Create(strText, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        CRect(0, 0, 60, 25), this, ID_STOP_BUTTON))
         return -1;
 
-    // Add Text button
     strText.LoadString(IDS_BTN_ADD_TEXT);
-    if (!m_addTextButton.Create(strText,
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        CRect(0, 0, 70, 25),
-        this,
-        ID_ADD_TEXT_BUTTON))
+    if (!m_addTextButton.Create(strText, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        CRect(0, 0, 70, 25), this, ID_ADD_TEXT_BUTTON))
         return -1;
 
-    // Restore saved FFmpeg folder
-    CString savedPath = AfxGetApp()->GetProfileString(L"Settings", L"FFmpegFolder", L"");
+    CString profileSection;
+    profileSection.LoadString(IDS_PROFILE_SECTION_SETTINGS);
+
+    CString profileKey;
+    profileKey.LoadString(IDS_PROFILE_KEY_FFMPEG_FOLDER);
+
+    CString savedPath = AfxGetApp()->GetProfileString(profileSection, profileKey, L"");
     if (!savedPath.IsEmpty())
     {
         m_config.SetFFmpegFolder(savedPath.GetString());
@@ -290,7 +284,13 @@ void NWPVideoEditorView::OnLoadFFmpegFolder()
             msg.Format(fmt, folderPath);
             AfxMessageBox(msg, MB_OK | MB_ICONINFORMATION);
 
-            AfxGetApp()->WriteProfileString(L"Settings", L"FFmpegFolder", folderPath);
+            CString profileSection;
+            profileSection.LoadString(IDS_PROFILE_SECTION_SETTINGS);
+
+            CString profileKey;
+            profileKey.LoadString(IDS_PROFILE_KEY_FFMPEG_FOLDER);
+
+            AfxGetApp()->WriteProfileString(profileSection, profileKey, folderPath);
         }
         else
         {
@@ -406,13 +406,23 @@ void NWPVideoEditorView::OnFileExport()
     CString filterStr;
     filterStr.LoadString(IDS_FILE_FILTER_MP4);
 
-    CFileDialog sfd(FALSE, L"mp4", L"output.mp4", OFN_OVERWRITEPROMPT, filterStr);
+    CString defaultExt;
+    defaultExt.LoadString(IDS_DEFAULT_EXPORT_EXT);
+
+    CString defaultFilename;
+    defaultFilename.LoadString(IDS_DEFAULT_EXPORT_FILENAME);
+
+    CFileDialog sfd(FALSE, defaultExt, defaultFilename, OFN_OVERWRITEPROMPT, filterStr);
     if (sfd.DoModal() != IDOK)
         return;
 
     CString out = sfd.GetPathName();
-    if (out.ReverseFind(L'.') < 0)
-        out += L".mp4";
+    if (out.Right(4).CompareNoCase(L".mp4") < 0)
+    {
+        CString dotExt;
+        dotExt.Format(L".%s", defaultExt.GetString());
+        out += dotExt;
+    }
 
     std::vector<TimelineClip> sorted = m_timelineClips;
     std::sort(sorted.begin(), sorted.end(),
@@ -428,10 +438,12 @@ void NWPVideoEditorView::OnFileExport()
     {
         const TimelineClip& c = sorted[0];
         CString cmd;
+        CString fmt;
 
         if (!textFilter.IsEmpty())
         {
-            cmd.Format(L"\"%s\" -y -ss %.3f -i \"%s\" -t %.3f -vf \"%s\" -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
+            fmt.LoadString(IDS_CMD_EXPORT_SINGLE_WITH_TEXT);
+            cmd.Format(fmt,
                 ffmpeg.GetString(),
                 c.clipStartSec,
                 c.path.GetString(),
@@ -441,7 +453,8 @@ void NWPVideoEditorView::OnFileExport()
         }
         else
         {
-            cmd.Format(L"\"%s\" -y -ss %.3f -i \"%s\" -t %.3f -c:v libx264 -preset veryfast -crf 20 -c:a aac \"%s\"",
+            fmt.LoadString(IDS_CMD_EXPORT_SINGLE_NO_TEXT);
+            cmd.Format(fmt,
                 ffmpeg.GetString(),
                 c.clipStartSec,
                 c.path.GetString(),
@@ -454,46 +467,71 @@ void NWPVideoEditorView::OnFileExport()
     else
     {
         CString cmd;
-        cmd.Format(L"\"%s\" -y", ffmpeg.GetString());
+        CString fmtBegin;
+        fmtBegin.LoadString(IDS_CMD_EXPORT_MULTI_BEGIN);
+        cmd.Format(fmtBegin, ffmpeg.GetString());
+
+        CString fmtInput;
+        fmtInput.LoadString(IDS_CMD_EXPORT_MULTI_INPUT);
 
         for (const auto& c : sorted)
         {
             CString part;
-            part.Format(L" -ss %.3f -t %.3f -i \"%s\"",
+            part.Format(fmtInput,
                 c.clipStartSec,
                 c.clipLengthSec,
                 c.path.GetString());
             cmd += part;
         }
 
-        CString fc = L" -filter_complex \"";
+        CString fc;
+        fc.LoadString(IDS_CMD_FILTER_COMPLEX_BEGIN);
+
+        CString segFmt;
+        segFmt.LoadString(IDS_CMD_FILTER_COMPLEX_SEGMENT);
+
         for (int i = 0; i < (int)sorted.size(); ++i)
         {
             CString seg;
-            seg.Format(L"[%d:v][%d:a]", i, i);
+            seg.Format(segFmt, i, i);
             fc += seg;
         }
 
-        CString cat;
-        cat.Format(L"concat=n=%d:v=1:a=1[v][a]", (int)sorted.size());
+        CString catFmt, cat;
+        catFmt.LoadString(IDS_CMD_EXPORT_MULTI_CONCAT);
+        cat.Format(catFmt, (int)sorted.size());
         fc += cat;
 
         if (!textFilter.IsEmpty())
         {
-            fc += L",[v]";
+            CString mapText;
+            mapText.LoadString(IDS_CMD_EXPORT_MULTI_MAP_TEXT);
+
+            CString textIn;
+            textIn.LoadString(IDS_CMD_FILTER_COMPLEX_TEXT_IN);
+
+            CString textOut;
+            textOut.LoadString(IDS_CMD_FILTER_COMPLEX_TEXT_OUT);
+
+            fc += textIn;
             fc += textFilter;
-            fc += L"[outv]\"";
+            fc += textOut;
             cmd += fc;
-            cmd += L" -map \"[outv]\" -map \"[a]\"";
+            cmd += mapText;
         }
         else
         {
+            CString mapPlain;
+            mapPlain.LoadString(IDS_CMD_EXPORT_MULTI_MAP_PLAIN);
+
             fc += L"\"";
             cmd += fc;
-            cmd += L" -map \"[v]\" -map \"[a]\"";
+            cmd += mapPlain;
         }
 
-        cmd += L" -c:v libx264 -preset veryfast -crf 20 -c:a aac ";
+        CString encodeTail;
+        encodeTail.LoadString(IDS_CMD_EXPORT_ENCODE_TAIL);
+        cmd += encodeTail;
         cmd += L"\"" + out + L"\"";
 
         ExecuteFFmpegCommand(cmd);
@@ -1333,25 +1371,33 @@ void NWPVideoEditorView::UpdatePreview()
 
 void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePosition)
 {
-    if (m_hPreviewBitmap) { DeleteObject(m_hPreviewBitmap); m_hPreviewBitmap = nullptr; }
+    if (m_hPreviewBitmap)
+    {
+        DeleteObject(m_hPreviewBitmap);
+        m_hPreviewBitmap = nullptr;
+    }
 
-    if (!m_config.IsFFmpegConfigured()) {
+    if (!m_config.IsFFmpegConfigured())
+    {
         CreateTestFrame(filePath, timePosition);
-        InvalidateRect(&m_rcPreview, FALSE);
+        InvalidateRect(m_rcPreview, FALSE);
         return;
     }
 
     wchar_t tmp[MAX_PATH];
     GetTempPath(MAX_PATH, tmp);
 
-    CString framePath;
-    framePath.Format(L"%snwpframe_%u.bmp", tmp, GetCurrentProcessId());
+    CString framePathFmt;
+    framePathFmt.LoadString(IDS_FMT_TEMP_PREVIEW_FRAME);
 
-    // Delete any leftover from previous call
+    CString framePath;
+    framePath.Format(framePathFmt, tmp, GetCurrentProcessId());
+
     DeleteFile(framePath);
 
-    CString cmd;
-    cmd.Format(L"\"%s\" -y -ss %.3f -i \"%s\" -vframes 1 -f image2 \"%s\"",
+    CString fmt, cmd;
+    fmt.LoadString(IDS_CMD_PREVIEW_FRAME);
+    cmd.Format(fmt,
         m_config.GetFFmpegExePath().c_str(),
         timePosition,
         filePath.GetString(),
@@ -1360,24 +1406,30 @@ void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePo
     DWORD exit = 0;
     RunProcessAndWait(cmd, 8000, &exit);
 
-    if (exit == 0 && GetFileAttributes(framePath) != INVALID_FILE_ATTRIBUTES) {
+    if (exit == 0 && GetFileAttributes(framePath) != INVALID_FILE_ATTRIBUTES)
         LoadBitmapFromFile(framePath);
-        DeleteFile(framePath);
-    }
+
+    DeleteFile(framePath);
 
     if (!m_hPreviewBitmap)
         CreateTestFrame(filePath, timePosition);
 
-    if (m_hPreviewBitmap) {
-        CRect inner = m_rcPreview; inner.DeflateRect(2, 2);
+    if (m_hPreviewBitmap)
+    {
+        CRect inner = m_rcPreview;
+        inner.DeflateRect(2, 2);
+
         double sx = (double)inner.Width() / max(1, m_videoWidth);
         double sy = (double)inner.Height() / max(1, m_videoHeight);
         double sc = min(sx, sy);
-        m_prevScaleX = sc; m_prevScaleY = sc;
+
+        m_prevScaleX = sc;
+        m_prevScaleY = sc;
         m_prevOffX = (inner.Width() - (int)(m_videoWidth * sc)) / 2;
         m_prevOffY = (inner.Height() - (int)(m_videoHeight * sc)) / 2;
     }
-    InvalidateRect(&m_rcPreview, FALSE);
+
+    InvalidateRect(m_rcPreview, FALSE);
 }
 
 void NWPVideoEditorView::DrawPreviewFrame(CDC* pDC)
@@ -1612,96 +1664,101 @@ double NWPVideoEditorView::GetCurrentClipDuration()
 
 double NWPVideoEditorView::GetVideoDurationAndSize(const CString& filePath, int& outW, int& outH)
 {
-    outW = 480; outH = 360;
-    if (!m_config.IsFFmpegConfigured()) return 30.0;
+    outW = 480;
+    outH = 360;
 
-    // Helper lambda: runs a command, captures stdout, returns output string
-    auto RunAndCapture = [](const CString& cmd) -> CString {
-        SECURITY_ATTRIBUTES sa = { sizeof(sa), nullptr, TRUE };
-        HANDLE hReadPipe = nullptr, hWritePipe = nullptr;
-        if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) return L"";
+    if (!m_config.IsFFmpegConfigured())
+        return 30.0;
 
-        // Don't inherit the read end
-        SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
+    auto RunAndCapture = [&](const CString& cmd) -> CString
+        {
+            SECURITY_ATTRIBUTES sa = { sizeof(sa), nullptr, TRUE };
+            HANDLE hReadPipe = nullptr, hWritePipe = nullptr;
+            if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
+                return L"";
 
-        STARTUPINFOW si = { sizeof(si) };
-        si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-        si.wShowWindow = SW_HIDE;
-        si.hStdOutput = hWritePipe;
-        si.hStdError = hWritePipe;
+            SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
 
-        PROCESS_INFORMATION pi = {};
-        CString mutable_cmd = cmd;
-        LPWSTR psz = mutable_cmd.GetBuffer(mutable_cmd.GetLength() + 16);
-        BOOL ok = CreateProcess(nullptr, psz, nullptr, nullptr,
-            TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-        mutable_cmd.ReleaseBuffer();
+            STARTUPINFOW si = { sizeof(si) };
+            si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+            si.wShowWindow = SW_HIDE;
+            si.hStdOutput = hWritePipe;
+            si.hStdError = hWritePipe;
 
-        // Close write end in parent so ReadFile returns when process exits
-        CloseHandle(hWritePipe);
+            PROCESS_INFORMATION pi = {};
+            CString mutableCmd = cmd;
+            LPWSTR psz = mutableCmd.GetBuffer(mutableCmd.GetLength() + 16);
 
-        CString result;
-        if (ok) {
-            char buf[512];
-            DWORD bytesRead = 0;
-            while (ReadFile(hReadPipe, buf, sizeof(buf) - 1, &bytesRead, nullptr) && bytesRead > 0) {
-                buf[bytesRead] = '\0';
-                result += CString(buf);
+            BOOL ok = CreateProcess(nullptr, psz, nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+            mutableCmd.ReleaseBuffer();
+
+            CloseHandle(hWritePipe);
+
+            CString result;
+            if (ok)
+            {
+                char buf[512];
+                DWORD bytesRead = 0;
+                while (ReadFile(hReadPipe, buf, sizeof(buf) - 1, &bytesRead, nullptr) && bytesRead > 0)
+                {
+                    buf[bytesRead] = 0;
+                    result += CString(buf);
+                }
+
+                WaitForSingleObject(pi.hProcess, 10000);
+                CloseHandle(pi.hProcess);
+                CloseHandle(pi.hThread);
             }
-            WaitForSingleObject(pi.hProcess, 10000);
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
-        }
-        CloseHandle(hReadPipe);
-        return result;
+
+            CloseHandle(hReadPipe);
+            return result;
         };
 
     CString ffprobe = m_config.GetFFprobeExePath().c_str();
 
-    // Get duration — outputs bare number e.g. "120.480000"
-    CString durCmd;
-    durCmd.Format(
-        L"\"%s\" -v error -show_entries format=duration "
-        L"-of default=noprint_wrappers=1:nokey=1 \"%s\"",
-        ffprobe.GetString(), filePath.GetString());
+    CString durFmt, durCmd;
+    durFmt.LoadString(IDS_CMD_FFPROBE_DURATION);
+    durCmd.Format(durFmt, ffprobe.GetString(), filePath.GetString());
 
-    // Get width and height — outputs two lines: e.g. "1920\n1080"
-    CString sizeCmd;
-    sizeCmd.Format(
-        L"\"%s\" -v error -select_streams v:0 "
-        L"-show_entries stream=width,height "
-        L"-of default=noprint_wrappers=1:nokey=1 \"%s\"",
-        ffprobe.GetString(), filePath.GetString());
+    CString sizeFmt, sizeCmd;
+    sizeFmt.LoadString(IDS_CMD_FFPROBE_SIZE);
+    sizeCmd.Format(sizeFmt, ffprobe.GetString(), filePath.GetString());
 
-    // Parse duration
     double duration = 30.0;
     CString durOut = RunAndCapture(durCmd);
     durOut.Trim();
-    if (!durOut.IsEmpty()) {
+    if (!durOut.IsEmpty())
+    {
         double d = _wtof(durOut);
-        if (d > 0.0) duration = d;
+        if (d > 0.0)
+            duration = d;
     }
 
-    // Parse width/height
     CString sizeOut = RunAndCapture(sizeCmd);
-    if (!sizeOut.IsEmpty()) {
+    if (!sizeOut.IsEmpty())
+    {
         int lineIdx = 0;
-        int pos = 0;
         CString token;
-        // Split by \n or \r\n
-        sizeOut.Replace(L"\r\n", L"\n");
-        sizeOut.Replace(L"\r", L"\n");
-        while (AfxExtractSubString(token, sizeOut, lineIdx, L'\n')) {
+
+        sizeOut.Replace(L"\r", L"");
+        sizeOut.Replace(L"\n", L"|");
+
+        while (AfxExtractSubString(token, sizeOut, lineIdx, L'|'))
+        {
             token.Trim();
-            if (!token.IsEmpty()) {
+            if (!token.IsEmpty())
+            {
                 int val = _wtoi(token);
-                if (val > 0) {
+                if (val > 0)
+                {
                     if (lineIdx == 0) outW = val;
                     if (lineIdx == 1) outH = val;
                 }
             }
+
             lineIdx++;
-            if (lineIdx > 4) break;
+            if (lineIdx > 4)
+                break;
         }
     }
 
@@ -1716,21 +1773,37 @@ void NWPVideoEditorView::LoadBitmapFromFile(const CString& path)
 
 HBITMAP NWPVideoEditorView::ExtractThumbnail(const CString& videoPath, double timePosition)
 {
-    if (!m_config.IsFFmpegConfigured()) return nullptr;
-    wchar_t tmp[MAX_PATH]; GetTempPath(MAX_PATH, tmp);
-    CString tp; tp.Format(L"%sthumb_%d.bmp", tmp, GetTickCount());
-    CString cmd;
-    cmd.Format(L"\"%s\" -y -ss %.2f -i \"%s\" -vframes 1 -vf scale=160:90 \"%s\"",
-        m_config.GetFFmpegExePath().c_str(), timePosition,
-        videoPath.GetString(), tp.GetString());
+    if (!m_config.IsFFmpegConfigured())
+        return nullptr;
+
+    wchar_t tmp[MAX_PATH];
+    GetTempPath(MAX_PATH, tmp);
+
+    CString thumbPathFmt;
+    thumbPathFmt.LoadString(IDS_FMT_TEMP_THUMBNAIL_FRAME);
+
+    CString tp;
+    tp.Format(thumbPathFmt, tmp, GetTickCount());
+
+    CString fmt, cmd;
+    fmt.LoadString(IDS_CMD_THUMBNAIL_FRAME);
+    cmd.Format(fmt,
+        m_config.GetFFmpegExePath().c_str(),
+        timePosition,
+        videoPath.GetString(),
+        tp.GetString());
+
     DWORD ex = 0;
     if (!RunProcessAndWait(cmd, 10000, &ex) || ex != 0)
     {
-        DeleteFile(tp); return nullptr;
+        DeleteFile(tp);
+        return nullptr;
     }
-    if (GetFileAttributes(tp) == INVALID_FILE_ATTRIBUTES) return nullptr;
-    HBITMAP bmp = (HBITMAP)LoadImage(NULL, tp, IMAGE_BITMAP, 0, 0,
-        LR_LOADFROMFILE | LR_CREATEDIBSECTION);
+
+    if (GetFileAttributes(tp) == INVALID_FILE_ATTRIBUTES)
+        return nullptr;
+
+    HBITMAP bmp = (HBITMAP)LoadImage(NULL, tp, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
     DeleteFile(tp);
     return bmp;
 }
