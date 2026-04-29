@@ -1233,13 +1233,13 @@ void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePo
     }
 
     wchar_t tmp[MAX_PATH];
-    GetTempPathW(MAX_PATH, tmp);
+    GetTempPath(MAX_PATH, tmp);
 
     CString framePath;
     framePath.Format(L"%snwpframe_%u.bmp", tmp, GetCurrentProcessId());
 
     // Delete any leftover from previous call
-    DeleteFileW(framePath);
+    DeleteFile(framePath);
 
     CString cmd;
     cmd.Format(L"\"%s\" -y -ss %.3f -i \"%s\" -vframes 1 -f image2 \"%s\"",
@@ -1251,9 +1251,9 @@ void NWPVideoEditorView::LoadPreviewFrame(const CString& filePath, double timePo
     DWORD exit = 0;
     RunProcessAndWait(cmd, 8000, &exit);
 
-    if (exit == 0 && GetFileAttributesW(framePath) != INVALID_FILE_ATTRIBUTES) {
+    if (exit == 0 && GetFileAttributes(framePath) != INVALID_FILE_ATTRIBUTES) {
         LoadBitmapFromFile(framePath);
-        DeleteFileW(framePath);
+        DeleteFile(framePath);
     }
 
     if (!m_hPreviewBitmap)
@@ -1508,7 +1508,7 @@ double NWPVideoEditorView::GetVideoDurationAndSize(const CString& filePath, int&
         PROCESS_INFORMATION pi = {};
         CString mutable_cmd = cmd;
         LPWSTR psz = mutable_cmd.GetBuffer(mutable_cmd.GetLength() + 16);
-        BOOL ok = CreateProcessW(nullptr, psz, nullptr, nullptr,
+        BOOL ok = CreateProcess(nullptr, psz, nullptr, nullptr,
             TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
         mutable_cmd.ReleaseBuffer();
 
@@ -1585,7 +1585,7 @@ double NWPVideoEditorView::GetVideoDurationAndSize(const CString& filePath, int&
 
 void NWPVideoEditorView::LoadBitmapFromFile(const CString& path)
 {
-    m_hPreviewBitmap = (HBITMAP)LoadImageW(NULL, path, IMAGE_BITMAP, 0, 0,
+    m_hPreviewBitmap = (HBITMAP)LoadImage(NULL, path, IMAGE_BITMAP, 0, 0,
         LR_LOADFROMFILE | LR_CREATEDIBSECTION);
 }
 
