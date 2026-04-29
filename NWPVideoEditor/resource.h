@@ -127,6 +127,10 @@
 #define IDS_MSG_REMOVE_CLIP             40028
 #define IDS_MSG_INVALID_SPLIT           40029
 #define IDS_MSG_FFMPEG_FAILED           40030
+#define IDS_MSG_NEW_PROJECT_CONFIRM     40055
+#define IDS_MSG_FFMPEG_NOT_CONFIGURED   40056
+#define IDS_MSG_FFMPEG_CONFIGURED       40057
+#define IDS_MSG_INVALID_FFMPEG_FOLDER   40058
 
 // --- String Resources: Context Menu Labels ---
 #define IDS_MENU_DELETE                 40031
@@ -149,6 +153,12 @@
 #define IDS_LBL_LOADING_FRAME           40052
 #define IDS_LBL_FFMPEG_FAILED           40053
 #define IDS_FFMPEG_FOLDER               40054
+#define IDS_PREVIEW_NO_PREVIEW          40059
+#define IDS_FMT_TEST_FRAME_TIME         40060
+#define IDS_LBL_FRAME_EXTRACTION_FAILED 40061
+#define IDS_LBL_FFMPEG_NOT_CONFIGURED   40062
+#define IDS_FMT_DRAWTEXT_FILTER         40063
+#define IDS_DRAWTEXT_COMMA              40064
 
 // --- Next default values for new objects ---
 #ifdef APSTUDIO_INVOKED
