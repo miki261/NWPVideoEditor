@@ -15,6 +15,7 @@ void EditorConfig::SetFFmpegFolder(const std::wstring& folderPath) {
     m_folderPath = folderPath;
     m_ffmpegPath = folderPath + L"\\ffmpeg.exe";
     m_ffprobePath = folderPath + L"\\ffprobe.exe";
+    m_ffplayPath = folderPath + L"\\ffplay.exe";
     UpdatePaths();
 }
 

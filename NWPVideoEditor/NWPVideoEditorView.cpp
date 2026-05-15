@@ -14,6 +14,8 @@
 
 IMPLEMENT_DYNCREATE(NWPVideoEditorView, CView)
 
+HANDLE g_hAudioProcess = NULL;
+
 BEGIN_MESSAGE_MAP(NWPVideoEditorView, CView)
     ON_WM_CREATE()
     ON_WM_SIZE()
@@ -593,18 +595,55 @@ void NWPVideoEditorView::StartPlayback()
     m_isPlaying = true;
     m_playbackStartTime = m_previewTimePosition;
     m_playbackStartTick = GetTickCount();
-    m_playbackTimer = SetTimer(1, 16, NULL);
+    m_playbackTimer = SetTimer(1, 33, NULL);
 
-    CString s; s.LoadString(IDS_BTN_PAUSE);
+    CString s;
+    s.LoadString(IDS_BTN_PAUSE);
     m_playPauseButton.SetWindowText(s);
+
+    if (m_config.IsFFmpegConfigured()) {
+        const TimelineClip& clip = m_timelineClips[m_activeTimelineClipIndex];
+
+        if (GetFileAttributes(m_config.GetFFplayExePath().c_str()) == INVALID_FILE_ATTRIBUTES) {
+            MessageBeep((UINT)-1);
+            return;
+        }
+
+        CString fmt, cmdLine;
+        if (fmt.LoadString(IDS_CMD_FFPLAY_AUDIO)) {
+            cmdLine.Format(fmt, m_config.GetFFplayExePath().c_str(), m_previewTimePosition, clip.path.GetString());
+
+            STARTUPINFO si = { sizeof(si) };
+            PROCESS_INFORMATION pi = { 0 };
+            si.dwFlags = STARTF_USESHOWWINDOW;
+            si.wShowWindow = SW_HIDE;
+
+            if (CreateProcess(NULL, cmdLine.GetBuffer(), NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+                g_hAudioProcess = pi.hProcess;
+                CloseHandle(pi.hThread);
+            }
+            cmdLine.ReleaseBuffer();
+        }
+    }
 }
 
 void NWPVideoEditorView::StopPlayback()
 {
-    if (m_playbackTimer) { KillTimer(m_playbackTimer); m_playbackTimer = 0; }
+    if (m_playbackTimer) {
+        KillTimer(m_playbackTimer);
+        m_playbackTimer = 0;
+    }
     m_isPlaying = false;
-    CString s; s.LoadString(IDS_BTN_PLAY);
+
+    CString s;
+    s.LoadString(IDS_BTN_PLAY);
     m_playPauseButton.SetWindowText(s);
+
+    if (g_hAudioProcess != NULL) {
+        TerminateProcess(g_hAudioProcess, 0);
+        CloseHandle(g_hAudioProcess);
+        g_hAudioProcess = NULL;
+    }
 }
 
 void NWPVideoEditorView::OnTimer(UINT_PTR nIDEvent)
@@ -806,7 +845,6 @@ void NWPVideoEditorView::OnContextMenu(CWnd*, CPoint point)
 
 void NWPVideoEditorView::OnLButtonDown(UINT nFlags, CPoint pt)
 {
-    // Text overlay drag in preview
     int previewTextHit = HitTestTextOverlayInPreview(pt);
     if (previewTextHit >= 0) {
         m_draggingTextIndex = previewTextHit;
@@ -824,7 +862,6 @@ void NWPVideoEditorView::OnLButtonDown(UINT nFlags, CPoint pt)
         return;
     }
 
-    // Text overlay handles on timeline
     int timelineTextHit = HitTestTimelineTextOverlay(pt);
     if (timelineTextHit >= 0) {
         m_activeTextOverlayIndex = timelineTextHit;
@@ -855,6 +892,10 @@ void NWPVideoEditorView::OnLButtonDown(UINT nFlags, CPoint pt)
     }
 
     if (!m_rcTimeline.PtInRect(pt)) { CView::OnLButtonDown(nFlags, pt); return; }
+
+    if (m_isPlaying) {
+        StopPlayback();
+    }
 
     m_dragState = DRAG_NONE;
     int hitIdx = HitTestTimelineClip(pt);

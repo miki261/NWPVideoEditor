@@ -173,6 +173,7 @@
 #define IDS_CMD_THUMBNAIL_FRAME           40074
 #define IDS_CMD_FFPROBE_DURATION          40075
 #define IDS_CMD_FFPROBE_SIZE              40076
+#define IDS_CMD_FFPLAY_AUDIO              40089
 
 // --- String Resources: Profile Keys ---
 #define IDS_PROFILE_SECTION_SETTINGS   40077
