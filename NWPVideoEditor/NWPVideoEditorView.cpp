@@ -419,7 +419,7 @@ void NWPVideoEditorView::OnFileExport()
         return;
 
     CString out = sfd.GetPathName();
-    if (out.Right(4).CompareNoCase(L".mp4") < 0)
+    if (out.Right(4).CompareNoCase(L".mp4") != 0)
     {
         CString dotExt;
         dotExt.Format(L".%s", defaultExt.GetString());
@@ -519,6 +519,7 @@ void NWPVideoEditorView::OnFileExport()
             fc += textFilter;
             fc += textOut;
             cmd += fc;
+            cmd += L" ";
             cmd += mapText;
         }
         else
@@ -528,13 +529,17 @@ void NWPVideoEditorView::OnFileExport()
 
             fc += L"\"";
             cmd += fc;
+            cmd += L" ";
             cmd += mapPlain;
         }
 
         CString encodeTail;
         encodeTail.LoadString(IDS_CMD_EXPORT_ENCODE_TAIL);
         cmd += encodeTail;
-        cmd += L"\"" + out + L"\"";
+
+        cmd += L" \"";
+        cmd += out;
+        cmd += L"\"";
 
         ExecuteFFmpegCommand(cmd);
     }
@@ -778,37 +783,32 @@ void NWPVideoEditorView::DrawTextOverlays(CDC* pDC)
 
 CString NWPVideoEditorView::BuildTextOverlayFilter() const
 {
-    if (m_textOverlays.empty())
-        return L"";
+    if (m_textOverlays.empty()) return L"";
 
     CString filter;
     CString fmt;
-    CString comma;
-
     fmt.LoadString(IDS_FMT_DRAWTEXT_FILTER);
-    comma.LoadString(IDS_DRAWTEXT_COMMA);
 
-    for (int i = 0; i < (int)m_textOverlays.size(); ++i)
-    {
-        const TextOverlay& o = m_textOverlays[i];
+    for (int i = 0; i < (int)m_textOverlays.size(); i++) {
+        const TextOverlay& overlay = m_textOverlays[i];
 
-        CString t = o.text;
-        t.Replace(L"'", L"\\'");
-        t.Replace(L":", L"\\:");
+        CString textA = overlay.text;
 
-        int vx = max(0, min(o.position.x, m_videoWidth - 10));
-        int vy = max(0, min(o.position.y, m_videoHeight - 10));
+        textA.Replace(L"'", L"");
+        textA.Replace(L":", L"\\:");
+        textA.Replace(L"\r", L"");
+        textA.Replace(L"\n", L" ");
 
-        CString f;
-        f.Format(fmt,
-            t.GetString(),
-            o.fontSize,
-            vx,
-            vy,
-            o.startSec,
-            o.startSec + o.durSec);
+        int videoX = (int)max(0.0, min((double)overlay.position.x, (double)m_videoWidth - 10));
+        int videoY = (int)max(0.0, min((double)overlay.position.y, (double)m_videoHeight - 10));
 
-        filter = (i == 0) ? f : (filter + comma + f);
+        CString overlayFilter;
+        overlayFilter.Format(fmt, textA.GetString(), overlay.fontSize, videoX, videoY, overlay.startSec, overlay.startSec + overlay.durSec);
+
+        if (i > 0) {
+            filter += L",";
+        }
+        filter += overlayFilter;
     }
 
     return filter;
