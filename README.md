@@ -20,7 +20,7 @@ Build configurations supported:
 - Debug x64, Release x64
 
 ## Run
-1) Download FFmpeg from https://ffmpeg.org/ (You need ffmpeg.exe and ffprobe.exe from the bin folder).
+1) Download FFmpeg from (https://www.gyan.dev/ffmpeg/builds/) (You need ffmpeg.exe, ffprobe.exe and ffplay.exe from the bin folder).
 2) Settings > Load FFmpeg and locate your ffmpeg folder.
 3) File > Open and select a media file (mp4/mov/mkv/avi/mp3/wav).
 4) Double-click / drag-drop the imported tile to place it on the timeline.
